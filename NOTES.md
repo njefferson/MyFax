@@ -94,12 +94,16 @@ this.
   `myfax` created, **staging.myfax.pages.dev is live** (PWA only, sandbox
   can't verify rendered page — pages.dev blocked from sessions). The Worker
   step FAILED: the hub's `CLOUDFLARE_API_TOKEN` is Pages-scoped, no Workers
-  permission (auth error 10000). Waiting on Noah: add **Account → Workers
-  Scripts → Edit** to that token at dash.cloudflare.com/profile/api-tokens,
-  then re-dispatch Deploy MyFax. Until then the app shows "Not linked" —
-  which is the truth. Worker runtime secrets (FaxDrop test key, SENDER_EMAIL,
-  ACCESS_CODE) also need adding to the HUB's repo secrets for the workflow's
-  secret-push step to have values.
+  permission (auth error 10000). Noah chose a SECOND token (2026-07-25):
+  the workflow now deploys the Worker with `CLOUDFLARE_WORKER_API_TOKEN`
+  (scope: Account → Workers Scripts → Edit, nothing else) and skips Worker
+  steps cleanly until that hub secret exists — the Pages token is never
+  widened. Waiting on Noah: create that token at
+  dash.cloudflare.com/profile/api-tokens and add it to the HUB's secrets,
+  along with `FAXDROP_TEST_API_KEY`, `SENDER_EMAIL`, `ACCESS_CODE` (values
+  already in MyFax's secrets) so the workflow can push the Worker's runtime
+  secrets. Then re-dispatch Deploy MyFax. Until then the app shows
+  "Not linked" — which is the truth.
 
 ## Waiting on Noah (the durable signal)
 
