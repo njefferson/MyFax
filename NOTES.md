@@ -152,3 +152,18 @@ Open items, in order:
    only on Noah's say-so. Balance-endpoint JSON keys become knowable then.
 9. §1 deviation (document transits relay + carrier): Noah has proceeded with
    the build knowing it — treat as accepted unless he says otherwise.
+
+### Update — 2026-07-25, follow-up session (branch `claude/myfax-notes-handoff-0pmsmy`)
+
+- Re-dispatched Deploy MyFax (staging, fax_key=test) to probe item 1: run #3
+  (hub run 30169349476, 18:18 UTC) fully green, but the secret-push step still
+  said "hub has no value for" all three — **the hub secrets are NOT added yet;
+  item 1 remains with Noah**, unchanged. Deploy itself is idempotent-clean.
+- Re-verified locally: worker self-test all pass, contrast gate all pass, axe
+  scan 0 violations / 0 page errors. Still green.
+- **Changelog honesty fix on this branch**: the staged 1.0.0 entry promised
+  "Word document" and "US" — FaxDrop takes PDF/JPEG/PNG only and reaches
+  US + Canada (F9/F10; the app's file picker was already correct). Merge this
+  branch into `staging` (and `main` at promote) so the fix ships with 1.0.0.
+- Hub carrier branch `claude/free-fax-pwa-c4bzw3`: deletion retried, git proxy
+  still 403s — remains a GitHub-UI task for Noah.
