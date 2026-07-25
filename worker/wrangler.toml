@@ -1,0 +1,21 @@
+name = "fax-relay"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+
+[vars]
+PROVIDER = "faxdrop"          # "faxdrop" | "telnyx"
+ALLOWED_ORIGIN = "*"          # set to the Pages origin once deployed
+
+# --- Telnyx only: uncomment when PROVIDER = "telnyx" ---
+# TELNYX_CONNECTION_ID = ""
+# TELNYX_FROM = "+15550001111"
+# MEDIA_PUBLIC_BASE = "https://media.example.com"
+#
+# [[r2_buckets]]
+# binding = "MEDIA"
+# bucket_name = "fax-media"
+
+# Secrets — set with `wrangler secret put NAME`, never in this file:
+#   FAXDROP_API_KEY
+#   TELNYX_API_KEY
+#   ACCESS_CODE

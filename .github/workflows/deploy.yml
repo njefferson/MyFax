@@ -1,0 +1,101 @@
+name: Deploy
+
+# staging -> Pages preview (staging.myfax.pages.dev)
+# main    -> Pages production (myfax.pages.dev) + the relay Worker
+# Mirrors the hub's deploy workflow. Skips gracefully until secrets exist.
+# Repo secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID,
+#               FAXDROP_API_KEY, ACCESS_CODE (Worker job only).
+
+on:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  pages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Prepare Cloudflare credentials
+        id: cf
+        env:
+          RAW_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RAW_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Strip whitespace/newlines that sneak in when a secret is pasted —
+          # a trailing newline corrupts the Authorization header (Cloudflare 6111).
+          TOKEN=$(printf '%s' "$RAW_TOKEN" | tr -d '[:space:]')
+          ACCOUNT=$(printf '%s' "$RAW_ACCOUNT" | tr -d '[:space:]')
+          echo "::add-mask::$TOKEN"
+          echo "::add-mask::$ACCOUNT"
+          if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Cloudflare secrets not configured yet - skipping deploy."
+          fi
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "account=$ACCOUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure Pages project exists
+        if: steps.cf.outputs.ready == 'true'
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ steps.cf.outputs.token }}
+          accountId: ${{ steps.cf.outputs.account }}
+          command: pages project create myfax --production-branch=main
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.cf.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ steps.cf.outputs.token }}
+          accountId: ${{ steps.cf.outputs.account }}
+          command: pages deploy public --project-name=myfax --branch=${{ github.ref_name }} --commit-dirty=true
+
+  worker:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Prepare credentials
+        id: cf
+        env:
+          RAW_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RAW_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RAW_FAX: ${{ secrets.FAXDROP_API_KEY }}
+        run: |
+          TOKEN=$(printf '%s' "$RAW_TOKEN" | tr -d '[:space:]')
+          ACCOUNT=$(printf '%s' "$RAW_ACCOUNT" | tr -d '[:space:]')
+          echo "::add-mask::$TOKEN"
+          echo "::add-mask::$ACCOUNT"
+          if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ] && [ -n "$RAW_FAX" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Cloudflare and/or FaxDrop secrets not configured yet - skipping Worker deploy."
+          fi
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "account=$ACCOUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy relay Worker (with secrets)
+        if: steps.cf.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ steps.cf.outputs.token }}
+          accountId: ${{ steps.cf.outputs.account }}
+          workingDirectory: worker
+          command: deploy
+          secrets: |
+            FAXDROP_API_KEY
+            ACCESS_CODE
+        env:
+          FAXDROP_API_KEY: ${{ secrets.FAXDROP_API_KEY }}
+          ACCESS_CODE: ${{ secrets.ACCESS_CODE }}

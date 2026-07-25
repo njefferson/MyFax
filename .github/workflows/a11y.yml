@@ -1,0 +1,16 @@
+name: accessibility-gate
+on:
+  push:
+  pull_request:
+jobs:
+  contrast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Computed contrast gate (Doctrine §4 — exits non-zero on any failure)
+        run: node tools/contrast-gate.mjs
+      - name: Worker self-test (stubbed provider, no network)
+        run: node tools/worker-selftest.mjs
