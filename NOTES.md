@@ -105,18 +105,50 @@ this.
   secrets. Then re-dispatch Deploy MyFax. Until then the app shows
   "Not linked" — which is the truth.
 
-## Waiting on Noah (the durable signal)
+## Session handoff — read this first (written 2026-07-25, end of build session)
 
-1. ~~FaxDrop account + API keys~~ DONE 2026-07-25: `FAXDROP_API_KEY` and
-   `FAXDROP_TEST_API_KEY` are set as repo secrets.
-2. **Remaining repo secrets** (GitHub → MyFax → Settings → Secrets and
-   variables → Actions): `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
-   (same values as the hub's), `SENDER_EMAIL` (required by FaxDrop; receives
-   delivery confirmations), and `ACCESS_CODE` (any string you choose — the
-   same one you'll paste into the app's Relay settings).
-3. Accept (or veto) the §1 deviation above — it's inherent to the product.
-4. **On-device pass** (Doctrine §7) once the staging preview URL exists —
-   nothing is promoted until your explicit "promote".
-5. Repo metadata (§10): description / website / topics / social preview —
-   exact values proposed in the session log; confirm each.
-6. **First live fax** — burns one of the month's two free ones; say when.
+State: 1.0.0 is staged and CI-green (worker self-test, journey walk, contrast
+gate, axe, FaxDrop sandbox smoke). Deploy-MyFax run #2 (hub run 30169155736,
+2026-07-25 18:12 UTC) was FULLY GREEN: staging.myfax.pages.dev live, and the
+relay Worker deployed at **https://fax-relay.noah-jefferson.workers.dev**
+(vars PROVIDER/ALLOWED_ORIGIN/SENDER_NAME confirmed in the log). The Worker
+has NO runtime secrets yet — the push step reported "hub has no value for"
+all three. Consequence: sends fail loudly (missing SENDER_EMAIL message,
+nothing spendable, no FaxDrop key on the Worker), and with no ACCESS_CODE the
+auth gate is open — harmless while keyless, but push all three TOGETHER.
+
+Open items, in order:
+
+1. **Worker runtime secrets in the HUB** — Noah adds `FAXDROP_TEST_API_KEY`,
+   `SENDER_EMAIL`, `ACCESS_CODE` to the HUB's repo secrets (values already in
+   MyFax's secrets, which feed only its CI smoke; GitHub secrets don't cross
+   repos). Then re-dispatch Deploy MyFax (branch=staging, fax_key=test) —
+   the secret-push step will say "pushed X" for each.
+2. **Relay linking**: Noah pastes
+   https://fax-relay.noah-jefferson.workers.dev + his access code into the
+   app's Relay settings on staging. Sandbox key = sends come back
+   `completed` instantly, no real fax, no credit.
+3. **On-device pass** (Doctrine §7) on staging — then Noah's explicit
+   "promote" = dispatch Deploy MyFax with branch=main (and fax_key=live when
+   he says so; `skip` leaves the Worker's current key alone).
+4. **1.0.0 needs its NAME from Noah** (Doctrine §7 — never invent). Goes in
+   the CHANGELOG heading as `1.0.0 "…"`.
+5. **Repo metadata** (§10, Noah pastes in GitHub UI, confirm each):
+   description "Free fax from your phone — an installable web app that sends
+   a document to any fax number. No account, no subscription." · website
+   https://myfax.pages.dev · topics fax, pwa, offline-first,
+   cloudflare-pages, cloudflare-workers · social preview pending (next item).
+6. **Icon + social preview**: Noah is generating WORDLESS images with
+   ChatGPT (doctrine §3: no words in AI imagery). When he brings them:
+   overlay "FAX RELAY" / "FREE FAX FROM YOUR PHONE" on the social banner
+   ourselves (mono caps, ink #191C18, contrast-checked), export 1280×640;
+   optionally regenerate public/icon-*.png from the icon image (keep the
+   maskable safe zone).
+7. **Hub wiring after promote**: hub links OUT to myfax.pages.dev, and
+   record the release in Project facts. The hub's leftover carrier branch
+   `claude/free-fax-pwa-c4bzw3` still needs deleting (GitHub UI or a session
+   whose proxy allows branch deletion).
+8. **First live fax** (faxbeep test number; spends 1 of 2 monthly frees) —
+   only on Noah's say-so. Balance-endpoint JSON keys become knowable then.
+9. §1 deviation (document transits relay + carrier): Noah has proceeded with
+   the build knowing it — treat as accepted unless he says otherwise.
