@@ -35,21 +35,24 @@ Promoted only with a locator, per the family evidence discipline.
 | F5 | Paid price $1.99/fax or volume credits; credits don't expire | faxdrop.com `/for-developers` | 2026-07-25 |
 | F6 | Twilio Programmable Fax is dead (sunset 2021-12-17); ignore tutorials built on it | Twilio changelog (well-established) | 2026-07-25 |
 | F7 | Free tier includes API access: sign in with Google → account dashboard → "API Keys" → Generate New Key; key shown ONCE at creation; up to 3 active keys | faxdrop.com `/for-developers` (via search excerpt) | 2026-07-25 |
-| F8 | Test recipient without owning a fax number: faxbeep.com publishes free test numbers and shows the received fax online in ~1–2 min — but received faxes are PUBLIC for 30 days, so test pages only. HP (1-888-473-2963) and Canon (1-855-FX-CANON) test lines only confirm by faxing BACK, useless without a receive number — for us, FaxDrop's `delivered` status is that half of the proof | faxbeep.com, techrepublic.com/article/free-test-fax | 2026-07-25 |
+| F8 | Test recipient without owning a fax number: faxbeep.com publishes free test numbers and shows the received fax online in ~1–2 min — but received faxes are PUBLIC for 30 days, so test pages only. HP (1-888-473-2963) and Canon (1-855-FX-CANON) test lines only confirm by faxing BACK, useless without a receive number | faxbeep.com, techrepublic.com/article/free-test-fax | 2026-07-25 |
+| F9 | **Official API contract** (supersedes F2–F4 where they conflict): send fields are `file` (PDF/JPEG/PNG only, **max 4 MB**), `recipientNumber` (E.164, US+Canada only), **required** `senderName` + `senderEmail`; optional `sendEmail`, `coverNote` (≤500), `recipientName`, `subject`, `senderCompany`, `senderPhone`. Success `{ success, faxId, deliveryEmail }`. Status response `{ status, pages, completedAt, error, errorCode, errorType }`; terminal success is **`completed`**; `partial` exists; provider `unknown` = retry with backoff. Read-only `GET /api/v1/account/balance` and `/api/v1/faxes`. Rate limits: send 10/min·30/hr·500/day, status/balance 60/min·500/hr·2000/day; upstream (Sinch) status refresh ≤ every 10 s per fax. **Never auto-retry a send after timeout/500 — duplicate risk.** Sandbox: `fd_test_` keys, synthetic `fdtest_` faxes, isolated from live. Changelog: faxdrop.com/for-developers/changelog | FaxDrop's official AI-agent API doc, retrieved by Noah from the dashboard and pasted 2026-07-25 | 2026-07-25 |
+| F10 | Corrections F9 forced: F2's field name was wrong (`to` → `recipientNumber`) and DOCX is NOT accepted (convert to PDF); F3's terminal wording `delivered` → `completed`; F4's "10/min all endpoints" was only the send limit — status polling is 60/min but capped by the 10 s upstream refresh. Code updated accordingly, same day | this ledger; commit history | 2026-07-25 |
 
-## Unverified / needs a live key
+## Unverified / still open
 
-- The FaxDrop **send + status round-trip has never been exercised** against a
-  real API key. `tools/worker-selftest.mjs` proves the Worker's own logic with
-  a stubbed provider; the first live send is the real test. It spends one of
-  the month's 2 free faxes — ask Noah before burning one.
-- **File-size ceiling**: the relay enforces 10 MB; FaxDrop's free *web* page
-  advertises 4 MB. The API's actual limit is unconfirmed — expect the provider
-  to reject large files with its own error (surfaced honestly in the tape).
+- **Sandbox round-trip against the real API**: `tools/sandbox-smoke.mjs` runs
+  in CI with Noah's `FAXDROP_TEST_API_KEY` (no fax sent, no credits spent) —
+  green in the `checks` workflow means our field names and parsing are
+  verified against FaxDrop's live servers.
+- **The balance response's JSON keys** — the endpoint is documented but not
+  its field names; the smoke test prints the keys it sees. Add the in-app
+  "free faxes left" display once they're known (roadmap).
+- **A real (live-key) fax** to a faxbeep test number — the final proof; spends
+  one of the month's 2 free faxes, only on Noah's say-so.
 - The **Telnyx adapter** is unexercised end-to-end (needs a paid account,
-  R2 bucket, owned number). Treat as scaffolding until proven.
-- Exact **status vocabulary** FaxDrop emits mid-flight (`mapStatus` covers the
-  plausible set and falls through to `unknown`, never guessing `delivered`).
+  R2 bucket, owned number). Treat as scaffolding until proven. Note it does
+  not satisfy FaxDrop's cover-sheet fields — it has none.
 
 ## Doctrine §1 deviation (accepted, bounded)
 
@@ -66,9 +69,10 @@ this.
   Noah's on-device pass, hub wiring after promote.
 - Wire the hub link (hub → app) once the app is live — the hub should never
   link to a 404.
-- Later, maybe: receive-a-fax (needs a number — monthly cost, Noah's call),
-  page-count preflight so the free tier's 5-page cap never surprises,
-  cover-note field (FaxDrop accepts `includeCover`).
+- Later, maybe: in-app "free faxes left this month" from `/api/balance` (once
+  the response keys are known), receive-a-fax (needs a number — monthly cost,
+  Noah's call), page-count preflight so the free tier's 5-page cap never
+  surprises, cover-note UI (the Worker already forwards `note` → `coverNote`).
 
 ## Project facts
 
@@ -88,13 +92,13 @@ this.
 
 ## Waiting on Noah (the durable signal)
 
-1. **FaxDrop account**: sign up at faxdrop.com and copy the API key from the
-   dashboard. Free tier = 2 faxes/month, ≤ 5 pages each incl. their forced
-   cover page.
-2. **Repo secrets** (GitHub → MyFax → Settings → Secrets and variables →
-   Actions): `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (same values
-   as the hub's), `FAXDROP_API_KEY`, and `ACCESS_CODE` (any string you choose —
-   the same one you'll paste into the app's Relay settings).
+1. ~~FaxDrop account + API keys~~ DONE 2026-07-25: `FAXDROP_API_KEY` and
+   `FAXDROP_TEST_API_KEY` are set as repo secrets.
+2. **Remaining repo secrets** (GitHub → MyFax → Settings → Secrets and
+   variables → Actions): `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
+   (same values as the hub's), `SENDER_EMAIL` (required by FaxDrop; receives
+   delivery confirmations), and `ACCESS_CODE` (any string you choose — the
+   same one you'll paste into the app's Relay settings).
 3. Accept (or veto) the §1 deviation above — it's inherent to the product.
 4. **On-device pass** (Doctrine §7) once the staging preview URL exists —
    nothing is promoted until your explicit "promote".

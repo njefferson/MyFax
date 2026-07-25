@@ -212,7 +212,7 @@
   .log-item .meta{grid-column:1/-1;color:var(--ink-soft);font-size:11px}
   .log-item .state{letter-spacing:.14em;text-transform:uppercase}
   .log-item .state[data-s="delivered"]{color:var(--signal-text)}
-  .log-item .state[data-s="failed"]{color:var(--fault)}
+  .log-item .state[data-s="failed"],.log-item .state[data-s="partial"]{color:var(--fault)}
   .log-item .state[data-s="queued"],.log-item .state[data-s="sending"]{color:var(--amber)}
   .empty-row{font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
 
@@ -258,10 +258,10 @@
     <div class="field">
       <span class="label">Document</span>
       <button type="button" class="drop" id="drop" data-loaded="false">
-        <span id="dropText">Choose a PDF, DOCX, JPEG or PNG</span>
-        <span class="size" id="dropSize">10 MB limit</span>
+        <span id="dropText">Choose a PDF, JPEG or PNG</span>
+        <span class="size" id="dropSize">4 MB limit</span>
       </button>
-      <input type="file" id="file" aria-label="Document to fax" accept=".pdf,.docx,.doc,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" hidden>
+      <input type="file" id="file" aria-label="Document to fax" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" hidden>
     </div>
 
     <button class="send" id="send" disabled>Send fax</button>

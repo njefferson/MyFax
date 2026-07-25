@@ -73,7 +73,7 @@ check('tape prints TO/FILE/CONNECT/REF', ['TO', 'walk.pdf', 'CONNECT', 'REF  fax
 check('lamp shows Sending', /sending/i.test(await page.locator('#lamp').textContent()));
 
 // Delivery takes two 8s polls
-await page.waitForFunction(() => document.querySelector('#tape')?.textContent.includes('OK — DELIVERED'), null, { timeout: 30000 });
+await page.waitForFunction(() => document.querySelector('#tape')?.textContent.includes('OK — DELIVERED'), null, { timeout: 45000 });
 const tape = await page.locator('#tape').textContent();
 check('delivered report prints pages + reference', tape.includes('Pages') && tape.includes('fax_walk1'), tape);
 check('lamp back to Ready', /ready/i.test(await page.locator('#lamp').textContent()));

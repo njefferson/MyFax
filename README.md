@@ -26,7 +26,8 @@ document through and stores nothing.
 
 ```bash
 cd worker
-npx wrangler secret put FAXDROP_API_KEY     # from the FaxDrop dashboard
+npx wrangler secret put FAXDROP_API_KEY     # fd_live_… (or fd_test_… to stay in the sandbox)
+npx wrangler secret put SENDER_EMAIL        # required by FaxDrop; gets delivery confirmations
 npx wrangler secret put ACCESS_CODE         # any string; blocks open-relay abuse
 npx wrangler deploy
 ```
@@ -47,15 +48,21 @@ the app's own origins; change it if you fork this under a different name.
 
 ## Testing a send without a recipient
 
-You don't need to know anyone with a fax machine:
+Three rungs, cheapest first:
 
-- **faxbeep.com** publishes free test numbers and displays the received fax on
-  their site within a minute or two — the only way to see the delivered page
-  with your own eyes. **Received faxes are public for 30 days**, so send a
-  meaningless test page, never a real document.
-- FaxDrop's own status API is the other half of the proof: the app's tape ends
-  in `OK — DELIVERED` only when the carrier confirms the handoff.
-- A free-tier test spends one of the month's 2 free faxes.
+1. **FaxDrop sandbox (free, no fax sent).** Generate an `fd_test_` key in the
+   FaxDrop dashboard and use it as `FAXDROP_API_KEY`. Sends never reach a
+   carrier and come back immediately `completed` — proves the whole
+   app→relay→FaxDrop pipeline end-to-end. Swap in the `fd_live_` key when
+   ready (test and live keys are isolated from each other).
+2. **faxbeep.com (free, real fax).** Their published test numbers receive your
+   fax and display it on their site within a minute or two — the only way to
+   see the delivered page with your own eyes. **Received faxes are public for
+   30 days**, so send a meaningless test page, never a real document. Spends
+   one of the month's 2 free faxes.
+3. FaxDrop's status API is the ongoing proof: the tape ends in
+   `OK — DELIVERED` only when the carrier confirms (FaxDrop's terminal status
+   `completed`), and the `SENDER_EMAIL` inbox gets a delivery confirmation.
 
 ## Keeping the relay yours (nobody burns your credit)
 
@@ -84,8 +91,11 @@ Selected by the `PROVIDER` var. Both satisfy the same adapter contract
 | | `faxdrop` (default) | `telnyx` |
 |---|---|---|
 | Cost | 2 faxes/month free (≤ 5 pages each), then $1.99/fax | ~$0.007/page, no minimum |
-| Free-tier cover page | forced, counts against the 5 pages | n/a |
-| API rate limits | 10/min · 100/hr · 500/day | generous |
+| Cover page | always present; sender name/email required, counts against the 5 pages | n/a |
+| Files | PDF, JPEG, PNG — max 4 MB (convert Word to PDF first) | hosted URL |
+| Send rate limits | 10/min · 30/hr · 500/day (status polls: 60/min) | generous |
+| Destinations | US (50 states) + Canada, E.164 | worldwide |
+| Sandbox | `fd_test_` key: full flow, no real fax, no credits | n/a |
 | Extra setup | none | R2 bucket + public media base + owned DID |
 
 Telnyx sends from a hosted URL rather than an upload, so the Worker stages the
@@ -94,17 +104,19 @@ file in R2 and hands Telnyx the public link. Uncomment the Telnyx block in
 
 ## Verification state
 
-- **Verified against FaxDrop's published docs (2026-07-25)**: send
-  `POST /api/send-fax` (multipart, `X-API-Key`), status `GET /api/v1/fax/{id}`,
-  supported types (PDF/DOCX/JPEG/PNG), free-tier shape, rate limits. Telnyx
-  `POST /v2/faxes` with `connection_id` + `media_url`, Bearer auth.
-- **Verified by test**: the Worker's routing, auth, validation, number
-  normalization, status mapping and error surfacing
-  (`node tools/worker-selftest.mjs`); the full client journey headless
-  (send → tape → delivered report → activity log) against a mock relay.
-- **Not yet verified**: a live send with a real API key (spends a free-tier
-  fax), the API's file-size ceiling (relay enforces 10 MB; FaxDrop's free web
-  page advertises 4 MB), and the Telnyx path end-to-end. See `NOTES.md`.
+- **Verified against FaxDrop's official API doc (2026-07-25)**: send
+  `POST /api/send-fax` (multipart `file`/`recipientNumber`/`senderName`/
+  `senderEmail`, `X-API-Key`), status `GET /api/v1/fax/{id}` (terminal success
+  `completed`; `partial` exists), types PDF/JPEG/PNG at ≤ 4 MB, rate limits,
+  sandbox keys, no-auto-retry-on-timeout rule. Full contract in `NOTES.md` F9.
+- **Verified by test**: the Worker's routing, auth, CORS allowlist,
+  validation, number normalization, official field names, status mapping and
+  error surfacing (`node tools/worker-selftest.mjs`); the full client journey
+  headless against a mock relay (`node tools/journey-walk.mjs`); the live
+  API's actual behavior via the sandbox smoke in CI
+  (`node tools/sandbox-smoke.mjs`, fd_test_ key, no fax sent).
+- **Not yet verified**: a real live-key fax (spends a free-tier fax), the
+  balance response's JSON keys, and the Telnyx path end-to-end. See `NOTES.md`.
 - **Dead**: Twilio Programmable Fax, sunset 17 Dec 2021. Ignore any tutorial
   built on it.
 
@@ -114,8 +126,11 @@ file in R2 and hands Telnyx the public link. Uncomment the Telnyx block in
   Background Sync, falling back to an `online` listener where Sync is absent.
 - The service worker caches the shell only. `/api/*` always hits the network —
   a cached fax status is a lie.
-- Status polling runs every 8 s (under FaxDrop's 10/min limit), stops after
-  5 minutes, and marks the fax `unknown` rather than guessing.
+- Status polling runs every 10 s (FaxDrop refreshes upstream status at most
+  that often per fax), stops after 5 minutes, and marks the fax `unknown`
+  rather than guessing.
+- A queued offline send is never blind-retried after an answered error — the
+  carrier may already have it, and a retry could send a duplicate.
 
 ## Checks
 

@@ -117,8 +117,8 @@ function formatSize(bytes) {
 
 function acceptFile(file) {
   if (!file) return;
-  if (file.size > 10 * 1024 * 1024) {
-    note(`${file.name} is ${formatSize(file.size)}. The limit is 10 MB.`, 'fault');
+  if (file.size > 4 * 1024 * 1024) {
+    note(`${file.name} is ${formatSize(file.size)}. The fax carrier's limit is 4 MB.`, 'fault');
     return;
   }
   picked = file;
@@ -223,13 +223,14 @@ async function send() {
 }
 
 /* Polls until the carrier reports a terminal state, then prints the report.
-   8s spacing stays under FaxDrop's 10-requests/minute API rate limit. */
+   10s spacing: FaxDrop refreshes upstream status at most once every 10s per
+   fax, so polling faster learns nothing and only spends rate limit. */
 async function watch(rec) {
   const stop = tapeWaiting('TRANSMITTING');
   const deadline = Date.now() + 5 * 60 * 1000;
 
   while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 8000));
+    await new Promise((r) => setTimeout(r, 10000));
     let s;
     try {
       s = await pollStatus(rec.id);
@@ -242,6 +243,13 @@ async function watch(rec) {
       tapeReport({ ...rec, pages: s.pages, started: rec.started });
       lamp('ready', 'Ready');
       await putSent({ ...rec, status: 'delivered', pages: s.pages ?? null });
+      return renderActivity();
+    }
+    if (s.status === 'partial') {
+      stop();
+      tapeLine(`PARTIAL — SOME PAGES DID NOT ARRIVE${s.error ? ` (${String(s.error).toUpperCase()})` : ''}`, 'fault');
+      lamp('fault', 'Partial');
+      await putSent({ ...rec, status: 'partial', pages: s.pages ?? null, error: s.error || 'Some pages did not arrive' });
       return renderActivity();
     }
     if (s.status === 'failed') {
@@ -263,8 +271,8 @@ function resetForm() {
   picked = null;
   els.file.value = '';
   els.drop.dataset.loaded = 'false';
-  els.dropText.textContent = 'Choose a PDF, DOCX, JPEG or PNG';
-  els.dropSize.textContent = '10 MB limit';
+  els.dropText.textContent = 'Choose a PDF, JPEG or PNG';
+  els.dropSize.textContent = '4 MB limit';
   refreshSendButton();
 }
 
@@ -283,7 +291,15 @@ async function drainQueue() {
       const sent = await postFax(rec, rec.blob);
       await dropQueued(rec.localId);
       await putSent({ ...rec, blob: undefined, id: sent.id, provider: sent.provider, status: sent.status || 'queued' });
-    } catch { /* leave it queued for the next attempt */ }
+    } catch (err) {
+      // The carrier may accept a fax even when the response is lost, and a
+      // blind retry can send a duplicate. Only a network-level failure (our
+      // relay never answered while we look offline again) stays queued; any
+      // answered error leaves the queue and asks for a deliberate resend.
+      if (err instanceof TypeError) continue;
+      await dropQueued(rec.localId);
+      await putSent({ ...rec, blob: undefined, status: 'failed', error: `${err.message} — not retried automatically; send again if FaxDrop sent no confirmation email.` });
+    }
   }
   await renderActivity();
 }

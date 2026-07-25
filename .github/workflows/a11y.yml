@@ -1,9 +1,9 @@
-name: accessibility-gate
+name: checks
 on:
   push:
   pull_request:
 jobs:
-  contrast:
+  gates:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,3 +14,8 @@ jobs:
         run: node tools/contrast-gate.mjs
       - name: Worker self-test (stubbed provider, no network)
         run: node tools/worker-selftest.mjs
+      - name: FaxDrop sandbox smoke (real API, fd_test_ key, no fax sent; skips when secret absent)
+        env:
+          FAXDROP_TEST_API_KEY: ${{ secrets.FAXDROP_TEST_API_KEY }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        run: node tools/sandbox-smoke.mjs

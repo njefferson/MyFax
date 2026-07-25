@@ -15,27 +15,39 @@
  * Status vocabulary is normalized to: queued | sending | delivered | failed | unknown
  */
 
-const NORMALIZED = ['queued', 'sending', 'delivered', 'failed', 'unknown'];
+const NORMALIZED = ['queued', 'sending', 'delivered', 'partial', 'failed', 'unknown'];
 
 /* ------------------------------------------------------------------ *
  * Adapter: FaxDrop  (default — free tier)
- * Endpoints per faxdrop.com published docs (read 2026-07-25):
- *   send:   POST /api/send-fax        multipart, X-API-Key header
- *   status: GET  /api/v1/fax/{id}     -> { id, status, pages, error, ... }
- * Rate limits: 10/min, 100/hr, 500/day — status polls count toward them.
- * Not yet exercised against a live API key; see NOTES.md.
+ * Per FaxDrop's official AI-agent API doc (retrieved by the account owner
+ * from the dashboard, 2026-07-25) — see NOTES.md ledger F9:
+ *   send:   POST /api/send-fax   multipart: file (PDF/JPEG/PNG, max 4 MB),
+ *           recipientNumber (E.164, US/Canada), senderName, senderEmail;
+ *           optional cover fields incl. coverNote -> { success, faxId }
+ *   status: GET /api/v1/fax/{id} -> { status, pages, completedAt, error,
+ *           errorCode, errorType }; terminal success is "completed"
+ *   balance: GET /api/v1/account/balance (read-only)
+ * Rate limits: send 10/min·30/hr·500/day; status 60/min, but upstream
+ * refreshes at most every 10 s per fax — poll no faster than that.
+ * NEVER auto-retry a send after a timeout/500: the carrier may have
+ * accepted it and a blind retry can send a duplicate.
+ * Sandbox: fd_test_ keys send no real fax and return an immediately
+ * "completed" fdtest_ id. Test and live keys are isolated.
  * ------------------------------------------------------------------ */
 const FAXDROP_BASE = 'https://www.faxdrop.com';
 const FAXDROP_SEND_PATH = '/api/send-fax';
 
 const faxdrop = {
-  async send({ to, filename, bytes, contentType, env }) {
+  async send({ to, filename, bytes, contentType, note, env }) {
+    if (!env.SENDER_EMAIL) {
+      throw new ProviderError(500, { error: 'The relay is missing its SENDER_EMAIL secret (FaxDrop requires a sender email for delivery confirmation).' });
+    }
     const form = new FormData();
-    form.append('to', to);
+    form.append('recipientNumber', to);
     form.append('file', new Blob([bytes], { type: contentType }), filename);
-    // Free-tier sends always carry a cover page; the flag is accepted but
-    // ignored unless the account is paid.
-    form.append('includeCover', 'true');
+    form.append('senderName', env.SENDER_NAME || 'Fax Relay');
+    form.append('senderEmail', env.SENDER_EMAIL);
+    if (note) form.append('coverNote', String(note).slice(0, 500));
 
     const res = await fetch(FAXDROP_BASE + FAXDROP_SEND_PATH, {
       method: 'POST',
@@ -44,7 +56,7 @@ const faxdrop = {
     });
     const body = await safeJson(res);
     if (!res.ok) throw new ProviderError(res.status, body);
-    return { id: body.id ?? body.faxId ?? body.fax_id, status: mapStatus(body.status) };
+    return { id: body.faxId ?? body.id ?? body.fax_id, status: mapStatus(body.status ?? 'queued') };
   },
 
   async status({ id, env }) {
@@ -53,7 +65,21 @@ const faxdrop = {
     });
     const body = await safeJson(res);
     if (!res.ok) throw new ProviderError(res.status, body);
-    return { status: mapStatus(body.status), pages: body.pages ?? null, error: body.error ?? null };
+    return {
+      status: mapStatus(body.status),
+      pages: body.pages ?? null,
+      error: body.error ?? body.errorType ?? null,
+    };
+  },
+
+  /** Read-only credit/usage passthrough; response shape not yet field-verified. */
+  async balance({ env }) {
+    const res = await fetch(`${FAXDROP_BASE}/api/v1/account/balance`, {
+      headers: { 'X-API-Key': env.FAXDROP_API_KEY },
+    });
+    const body = await safeJson(res);
+    if (!res.ok) throw new ProviderError(res.status, body);
+    return body;
   },
 };
 
@@ -113,7 +139,8 @@ function mapStatus(raw) {
   const s = String(raw ?? '').toLowerCase();
   if (['queued', 'pending', 'media.processed', 'accepted'].includes(s)) return 'queued';
   if (['sending', 'sending.started', 'in_progress', 'dialing'].includes(s)) return 'sending';
-  if (['delivered', 'sent', 'success', 'ok', 'completed'].includes(s)) return 'delivered';
+  if (['completed', 'delivered', 'sent', 'success', 'ok'].includes(s)) return 'delivered';
+  if (s === 'partial') return 'partial'; // some pages arrived, some did not — its own truth
   if (['failed', 'error', 'canceled', 'cancelled'].includes(s)) return 'failed';
   return 'unknown';
 }
@@ -201,7 +228,7 @@ export default {
 
         if (!to) return json({ error: 'Fax number must be 10 digits, or +country code.' }, ch, 400);
         if (!file || typeof file === 'string') return json({ error: 'Attach a file to send.' }, ch, 400);
-        if (file.size > 10 * 1024 * 1024) return json({ error: 'File is over the 10 MB limit.' }, ch, 400);
+        if (file.size > 4 * 1024 * 1024) return json({ error: 'File is over FaxDrop’s 4 MB limit.' }, ch, 400);
 
         const bytes = new Uint8Array(await file.arrayBuffer());
         const result = await adapter.send({
@@ -221,9 +248,16 @@ export default {
         const result = await adapter.status({ id, env });
         return json({ id, provider: providerName, ...result }, ch);
       }
+
+      if (url.pathname === '/api/balance' && request.method === 'GET') {
+        if (!adapter.balance) return json({ error: `Provider "${providerName}" has no balance endpoint.` }, ch, 404);
+        const result = await adapter.balance({ env });
+        return json({ provider: providerName, balance: result }, ch);
+      }
     } catch (err) {
       if (err instanceof ProviderError) {
-        const detail = err.body?.error || err.body?.message || err.body?.raw || 'Provider rejected the request.';
+        let detail = err.body?.error || err.body?.message || err.body?.raw || 'Provider rejected the request.';
+        if (err.body?.hint) detail = `${detail} (${err.body.hint})`;
         return json({ error: String(detail), providerStatus: err.status }, ch, 502);
       }
       return json({ error: err.message || 'Relay failure.' }, ch, 500);

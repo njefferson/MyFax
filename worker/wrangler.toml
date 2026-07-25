@@ -7,6 +7,7 @@ PROVIDER = "faxdrop"          # "faxdrop" | "telnyx"
 # Comma-separated origin allowlist: only the app itself may call the relay
 # from a browser. The access code blocks non-browser (curl) abuse.
 ALLOWED_ORIGIN = "https://myfax.pages.dev,https://staging.myfax.pages.dev"
+SENDER_NAME = "Fax Relay"     # appears on FaxDrop's cover page
 
 # --- Telnyx only: uncomment when PROVIDER = "telnyx" ---
 # TELNYX_CONNECTION_ID = ""
@@ -17,7 +18,9 @@ ALLOWED_ORIGIN = "https://myfax.pages.dev,https://staging.myfax.pages.dev"
 # binding = "MEDIA"
 # bucket_name = "fax-media"
 
-# Secrets — set with `wrangler secret put NAME`, never in this file:
-#   FAXDROP_API_KEY
+# Secrets — set with `wrangler secret put NAME` (or repo secrets in CI),
+# never in this file:
+#   FAXDROP_API_KEY   fd_test_… for the sandbox, fd_live_… for real sends
+#   SENDER_EMAIL      required by FaxDrop; receives delivery confirmations
 #   TELNYX_API_KEY
 #   ACCESS_CODE
