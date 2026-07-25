@@ -35,6 +35,7 @@ Promoted only with a locator, per the family evidence discipline.
 | F5 | Paid price $1.99/fax or volume credits; credits don't expire | faxdrop.com `/for-developers` | 2026-07-25 |
 | F6 | Twilio Programmable Fax is dead (sunset 2021-12-17); ignore tutorials built on it | Twilio changelog (well-established) | 2026-07-25 |
 | F7 | Free tier includes API access: sign in with Google → account dashboard → "API Keys" → Generate New Key; key shown ONCE at creation; up to 3 active keys | faxdrop.com `/for-developers` (via search excerpt) | 2026-07-25 |
+| F8 | Test recipient without owning a fax number: faxbeep.com publishes free test numbers and shows the received fax online in ~1–2 min — but received faxes are PUBLIC for 30 days, so test pages only. HP (1-888-473-2963) and Canon (1-855-FX-CANON) test lines only confirm by faxing BACK, useless without a receive number — for us, FaxDrop's `delivered` status is that half of the proof | faxbeep.com, techrepublic.com/article/free-test-fax | 2026-07-25 |
 
 ## Unverified / needs a live key
 

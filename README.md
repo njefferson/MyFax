@@ -42,8 +42,39 @@ npx wrangler pages deploy public --project-name myfax
 `.github/workflows/deploy.yml`.)
 
 **3. Link them** — open the PWA, expand *Relay settings*, paste the Worker URL
-and the access code. Then set `ALLOWED_ORIGIN` in `wrangler.toml` to the Pages
-origin and redeploy the Worker.
+and the access code. `ALLOWED_ORIGIN` in `wrangler.toml` is already locked to
+the app's own origins; change it if you fork this under a different name.
+
+## Testing a send without a recipient
+
+You don't need to know anyone with a fax machine:
+
+- **faxbeep.com** publishes free test numbers and displays the received fax on
+  their site within a minute or two — the only way to see the delivered page
+  with your own eyes. **Received faxes are public for 30 days**, so send a
+  meaningless test page, never a real document.
+- FaxDrop's own status API is the other half of the proof: the app's tape ends
+  in `OK — DELIVERED` only when the carrier confirms the handoff.
+- A free-tier test spends one of the month's 2 free faxes.
+
+## Keeping the relay yours (nobody burns your credit)
+
+The page is public; the *relay* is not. Layers, outermost first:
+
+1. **The relay address ships blank.** A stranger who installs the PWA sees
+   "Not linked" — the Worker URL is known only to you.
+2. **Access code.** Every send/status call must carry `X-Access-Code` matching
+   the Worker's `ACCESS_CODE` secret. Without it: 401. This is the real lock —
+   it stops curl, not just browsers. If the code ever leaks, change the
+   `ACCESS_CODE` repo secret and push to redeploy: instant rotation.
+3. **CORS allowlist.** The Worker only answers browser JS from the app's own
+   origins, so a copycat site can't piggyback on your relay.
+4. **Bounded blast radius.** The free tier is 2 faxes/month and the API key is
+   rate-limited (10/min) — even a leaked code can't run up a real bill unless
+   you've bought credits.
+
+Anyone else who wants the app deploys their own Worker with their own free
+FaxDrop key — that's the intended model, and this README is the instructions.
 
 ## Providers
 

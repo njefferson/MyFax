@@ -135,18 +135,26 @@ async function safeJson(res) {
   }
 }
 
-function cors(env) {
+/* ALLOWED_ORIGIN is a comma-separated allowlist (or "*"). A request from a
+   listed origin gets that origin echoed back; anything else gets the first
+   listed origin, so foreign pages fail the browser's CORS check. This blocks
+   other websites' JS — the access code is what blocks direct (curl) abuse. */
+function cors(request, env) {
+  const allowed = String(env.ALLOWED_ORIGIN || '*').split(',').map((s) => s.trim()).filter(Boolean);
+  const origin = request.headers.get('Origin') || '';
+  const allow = allowed.includes('*') ? '*' : (allowed.includes(origin) ? origin : allowed[0]);
   return {
-    'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN || '*',
+    'Access-Control-Allow-Origin': allow,
     'Access-Control-Allow-Headers': 'Content-Type, X-Access-Code',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Vary': 'Origin',
   };
 }
 
-function json(data, env, status = 200) {
+function json(data, headers, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json', ...cors(env) },
+    headers: { 'Content-Type': 'application/json', ...headers },
   });
 }
 
@@ -169,19 +177,20 @@ function normalizeNumber(input) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    const ch = cors(request, env);
 
-    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(env) });
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: ch });
 
     const providerName = (env.PROVIDER || 'faxdrop').toLowerCase();
     const adapter = ADAPTERS[providerName];
-    if (!adapter) return json({ error: `Unknown provider "${providerName}"` }, env, 500);
+    if (!adapter) return json({ error: `Unknown provider "${providerName}"` }, ch, 500);
 
     if (url.pathname === '/api/health') {
-      return json({ ok: true, provider: providerName, statuses: NORMALIZED }, env);
+      return json({ ok: true, provider: providerName, statuses: NORMALIZED }, ch);
     }
 
     if (!authorized(request, env)) {
-      return json({ error: 'Access code rejected. Check the code in Settings.' }, env, 401);
+      return json({ error: 'Access code rejected. Check the code in Settings.' }, ch, 401);
     }
 
     try {
@@ -190,9 +199,9 @@ export default {
         const to = normalizeNumber(form.get('to'));
         const file = form.get('file');
 
-        if (!to) return json({ error: 'Fax number must be 10 digits, or +country code.' }, env, 400);
-        if (!file || typeof file === 'string') return json({ error: 'Attach a file to send.' }, env, 400);
-        if (file.size > 10 * 1024 * 1024) return json({ error: 'File is over the 10 MB limit.' }, env, 400);
+        if (!to) return json({ error: 'Fax number must be 10 digits, or +country code.' }, ch, 400);
+        if (!file || typeof file === 'string') return json({ error: 'Attach a file to send.' }, ch, 400);
+        if (file.size > 10 * 1024 * 1024) return json({ error: 'File is over the 10 MB limit.' }, ch, 400);
 
         const bytes = new Uint8Array(await file.arrayBuffer());
         const result = await adapter.send({
@@ -203,23 +212,23 @@ export default {
           note: form.get('note') || '',
           env,
         });
-        return json({ ...result, provider: providerName, to }, env);
+        return json({ ...result, provider: providerName, to }, ch);
       }
 
       if (url.pathname === '/api/status' && request.method === 'GET') {
         const id = url.searchParams.get('id');
-        if (!id) return json({ error: 'Missing id.' }, env, 400);
+        if (!id) return json({ error: 'Missing id.' }, ch, 400);
         const result = await adapter.status({ id, env });
-        return json({ id, provider: providerName, ...result }, env);
+        return json({ id, provider: providerName, ...result }, ch);
       }
     } catch (err) {
       if (err instanceof ProviderError) {
         const detail = err.body?.error || err.body?.message || err.body?.raw || 'Provider rejected the request.';
-        return json({ error: String(detail), providerStatus: err.status }, env, 502);
+        return json({ error: String(detail), providerStatus: err.status }, ch, 502);
       }
-      return json({ error: err.message || 'Relay failure.' }, env, 500);
+      return json({ error: err.message || 'Relay failure.' }, ch, 500);
     }
 
-    return json({ error: 'Not found.' }, env, 404);
+    return json({ error: 'Not found.' }, ch, 404);
   },
 };

@@ -28,7 +28,7 @@ globalThis.fetch = async (url, init = {}) => {
   return new Response(JSON.stringify({ error: 'unexpected upstream call' }), { status: 500 });
 };
 
-const env = { FAXDROP_API_KEY: 'fd_test', ACCESS_CODE: 'letmein', PROVIDER: 'faxdrop', ALLOWED_ORIGIN: 'https://example.pages.dev' };
+const env = { FAXDROP_API_KEY: 'fd_test', ACCESS_CODE: 'letmein', PROVIDER: 'faxdrop', ALLOWED_ORIGIN: 'https://example.pages.dev, https://staging.example.pages.dev' };
 const base = 'https://relay.test';
 const call = (path, init) => worker.fetch(new Request(base + path, init), env);
 
@@ -36,7 +36,12 @@ const call = (path, init) => worker.fetch(new Request(base + path, init), env);
 let res = await call('/api/health');
 let body = await res.json();
 check('health responds 200 with provider', res.status === 200 && body.provider === 'faxdrop');
-check('CORS origin honored', res.headers.get('Access-Control-Allow-Origin') === env.ALLOWED_ORIGIN);
+
+// CORS allowlist: listed origins echo back, foreign origins do not
+res = await call('/api/health', { headers: { Origin: 'https://staging.example.pages.dev' } });
+check('CORS echoes a listed origin', res.headers.get('Access-Control-Allow-Origin') === 'https://staging.example.pages.dev');
+res = await call('/api/health', { headers: { Origin: 'https://evil.example.com' } });
+check('CORS refuses a foreign origin', res.headers.get('Access-Control-Allow-Origin') === 'https://example.pages.dev');
 
 // auth wall
 res = await call('/api/status?id=x');

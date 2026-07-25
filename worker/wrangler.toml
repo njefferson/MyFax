@@ -4,7 +4,9 @@ compatibility_date = "2026-07-01"
 
 [vars]
 PROVIDER = "faxdrop"          # "faxdrop" | "telnyx"
-ALLOWED_ORIGIN = "*"          # set to the Pages origin once deployed
+# Comma-separated origin allowlist: only the app itself may call the relay
+# from a browser. The access code blocks non-browser (curl) abuse.
+ALLOWED_ORIGIN = "https://myfax.pages.dev,https://staging.myfax.pages.dev"
 
 # --- Telnyx only: uncomment when PROVIDER = "telnyx" ---
 # TELNYX_CONNECTION_ID = ""
