@@ -38,9 +38,11 @@ npx wrangler deploy
 npx wrangler pages deploy public --project-name myfax
 ```
 
-(In this repo both deploys are CI-driven once the repo secrets exist: push to
-`staging` for a preview, `main` for production — see
-`.github/workflows/deploy.yml`.)
+(In this family, the **hub repo deploys MyFax** — it holds the Cloudflare
+credentials. Run the hub's `Deploy MyFax` workflow and pick the branch:
+`staging` → staging.myfax.pages.dev preview, `main` → myfax.pages.dev
+production, plus the relay Worker. The manual wrangler commands above are the
+fallback for anyone self-hosting a fork.)
 
 **3. Link them** — open the PWA, expand *Relay settings*, paste the Worker URL
 and the access code. `ALLOWED_ORIGIN` in `wrangler.toml` is already locked to

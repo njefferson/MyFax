@@ -83,10 +83,13 @@ this.
   could NOT be deleted from the session (git proxy 403s branch deletion) —
   Noah can remove it from the hub's Branches page in the GitHub UI, or any
   session can once the proxy allows it. Nothing links to it.
-- Deploys are CI-driven (`.github/workflows/deploy.yml`, mirroring the hub's):
-  `staging` → Pages preview (staging.myfax.pages.dev), `main` →
-  myfax.pages.dev production + the relay Worker — all skipped gracefully until
-  the repo secrets below exist.
+- **Deploys run from the HUB repo** (`deploy-myfax.yml` there, manual
+  dispatch), because GitHub secrets don't cross repos and the hub holds the
+  family's Cloudflare credentials (Noah's call, 2026-07-25). Inputs: branch
+  (`staging` → staging.myfax.pages.dev preview, `main` → myfax.pages.dev) and
+  which FaxDrop key the Worker gets (`test` sandbox / `live` / `skip`).
+  Worker runtime secrets are pushed only when the hub also holds them —
+  MyFax's own copies of those secrets serve its CI smoke test.
 
 ## Waiting on Noah (the durable signal)
 
