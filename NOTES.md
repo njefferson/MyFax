@@ -167,3 +167,20 @@ Open items, in order:
   branch into `staging` (and `main` at promote) so the fix ships with 1.0.0.
 - Hub carrier branch `claude/free-fax-pwa-c4bzw3`: deletion retried, git proxy
   still 403s — remains a GitHub-UI task for Noah.
+- **Item 6 (icon + social preview) done in code**: Noah's wordless ChatGPT
+  images arrived as chat pictures only (no files reach the sandbox disk), so
+  `tools/render-icons.py` was rewritten to recreate his compositions exactly —
+  handset + coiled cord, grille, keypad dots, blue lamp, and the perforated
+  tape on the banner — in the app palette. It now also renders
+  `social-preview.png` (1280×640, repo root) with "FAX RELAY" / "FREE FAX FROM
+  YOUR PHONE" overlaid in mono caps ink (contrast computed at render time,
+  9.42:1; script fails under 4.5). Maskable icon verified programmatically
+  inside the 40%-radius safe zone (171px vs 205px). Noah still uploads the
+  social preview in the GitHub UI (§10) after eyeballing it. Icons sit in the
+  SW shell; nothing has shipped, so no triplet bump — any staging device that
+  cached 1.0.0 refreshes when sw.js next changes.
+- Noah asked why the Worker runtime secrets go in the HUB. Answer given:
+  Actions secrets never cross repos, and the deploy workflow lives in the hub
+  (his 2026-07-25 call, since it held the Cloudflare tokens). Standing offer:
+  move `deploy-myfax.yml` into MyFax and put the two Cloudflare tokens +
+  account id in MyFax's secrets instead — his call, not made yet.
