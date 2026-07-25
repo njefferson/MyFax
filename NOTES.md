@@ -76,8 +76,10 @@ this.
   endpoint, poll rate vs. rate limit, a11y contrast + targets), verified
   (worker self-test, headless journey walk, contrast gate, axe scan — all
   green), and moved into `njefferson/MyFax` on `main` + `staging`. The hub's
-  temporary carrier branch (`claude/free-fax-pwa-c4bzw3`) was deleted after
-  the move.
+  temporary carrier branch (`claude/free-fax-pwa-c4bzw3`) is now redundant but
+  could NOT be deleted from the session (git proxy 403s branch deletion) —
+  Noah can remove it from the hub's Branches page in the GitHub UI, or any
+  session can once the proxy allows it. Nothing links to it.
 - Deploys are CI-driven (`.github/workflows/deploy.yml`, mirroring the hub's):
   `staging` → Pages preview (staging.myfax.pages.dev), `main` →
   myfax.pages.dev production + the relay Worker — all skipped gracefully until
