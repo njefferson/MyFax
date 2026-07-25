@@ -90,6 +90,16 @@ this.
   which FaxDrop key the Worker gets (`test` sandbox / `live` / `skip`).
   Worker runtime secrets are pushed only when the hub also holds them —
   MyFax's own copies of those secrets serve its CI smoke test.
+- First staging deploy 2026-07-25 (hub run 30168604377): Pages project
+  `myfax` created, **staging.myfax.pages.dev is live** (PWA only, sandbox
+  can't verify rendered page — pages.dev blocked from sessions). The Worker
+  step FAILED: the hub's `CLOUDFLARE_API_TOKEN` is Pages-scoped, no Workers
+  permission (auth error 10000). Waiting on Noah: add **Account → Workers
+  Scripts → Edit** to that token at dash.cloudflare.com/profile/api-tokens,
+  then re-dispatch Deploy MyFax. Until then the app shows "Not linked" —
+  which is the truth. Worker runtime secrets (FaxDrop test key, SENDER_EMAIL,
+  ACCESS_CODE) also need adding to the HUB's repo secrets for the workflow's
+  secret-push step to have values.
 
 ## Waiting on Noah (the durable signal)
 
