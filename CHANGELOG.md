@@ -7,8 +7,10 @@ triplet.
 
 ## 1.0.0 — VERSION — staged, not yet released
 
-Send a PDF, photo, or Word document to any US fax number straight from your
-phone — free, no account, no app store. Pick the file, type the number, press
+Send a PDF or photo (JPEG/PNG) to any US or Canadian fax number straight from
+your phone — free, no account, no app store. A Word document needs saving as
+PDF first — the fax service takes only those three. Pick the file, type the
+number, press
 Send, and watch the transmission tape print each step until the carrier
 confirms delivery. If you're offline, the fax waits on your device and goes out
 by itself when you're back online. Your history stays on your phone; nothing is
