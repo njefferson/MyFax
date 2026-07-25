@@ -38,16 +38,14 @@ Promoted only with a locator, per the family evidence discipline.
 | F8 | Test recipient without owning a fax number: faxbeep.com publishes free test numbers and shows the received fax online in ~1–2 min — but received faxes are PUBLIC for 30 days, so test pages only. HP (1-888-473-2963) and Canon (1-855-FX-CANON) test lines only confirm by faxing BACK, useless without a receive number | faxbeep.com, techrepublic.com/article/free-test-fax | 2026-07-25 |
 | F9 | **Official API contract** (supersedes F2–F4 where they conflict): send fields are `file` (PDF/JPEG/PNG only, **max 4 MB**), `recipientNumber` (E.164, US+Canada only), **required** `senderName` + `senderEmail`; optional `sendEmail`, `coverNote` (≤500), `recipientName`, `subject`, `senderCompany`, `senderPhone`. Success `{ success, faxId, deliveryEmail }`. Status response `{ status, pages, completedAt, error, errorCode, errorType }`; terminal success is **`completed`**; `partial` exists; provider `unknown` = retry with backoff. Read-only `GET /api/v1/account/balance` and `/api/v1/faxes`. Rate limits: send 10/min·30/hr·500/day, status/balance 60/min·500/hr·2000/day; upstream (Sinch) status refresh ≤ every 10 s per fax. **Never auto-retry a send after timeout/500 — duplicate risk.** Sandbox: `fd_test_` keys, synthetic `fdtest_` faxes, isolated from live. Changelog: faxdrop.com/for-developers/changelog | FaxDrop's official AI-agent API doc, retrieved by Noah from the dashboard and pasted 2026-07-25 | 2026-07-25 |
 | F10 | Corrections F9 forced: F2's field name was wrong (`to` → `recipientNumber`) and DOCX is NOT accepted (convert to PDF); F3's terminal wording `delivered` → `completed`; F4's "10/min all endpoints" was only the send limit — status polling is 60/min but capped by the 10 s upstream refresh. Code updated accordingly, same day | this ledger; commit history | 2026-07-25 |
+| F11 | **Sandbox round-trip VERIFIED against FaxDrop's live servers**: `POST /api/send-fax` with `recipientNumber`/`senderName`/`senderEmail` → 200 `{ success, faxId: fdtest_… }`; `GET /api/v1/fax/{id}` → 200 `completed`. Balance on a test key → 400 (test/live isolation) | CI run 30168093917 (`checks` workflow, MyFax), 2026-07-25 | 2026-07-25 |
 
 ## Unverified / still open
 
-- **Sandbox round-trip against the real API**: `tools/sandbox-smoke.mjs` runs
-  in CI with Noah's `FAXDROP_TEST_API_KEY` (no fax sent, no credits spent) —
-  green in the `checks` workflow means our field names and parsing are
-  verified against FaxDrop's live servers.
-- **The balance response's JSON keys** — the endpoint is documented but not
-  its field names; the smoke test prints the keys it sees. Add the in-app
-  "free faxes left" display once they're known (roadmap).
+- **The balance response's JSON keys** — a sandbox key gets 400 from
+  `/api/v1/account/balance` (CI run 30168093917, 2026-07-25; test keys are
+  isolated from live account data), so the shape stays unknown until checked
+  once with the live key. Add the in-app "free faxes left" display then.
 - **A real (live-key) fax** to a faxbeep test number — the final proof; spends
   one of the month's 2 free faxes, only on Noah's say-so.
 - The **Telnyx adapter** is unexercised end-to-end (needs a paid account,
