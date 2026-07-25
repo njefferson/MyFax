@@ -179,8 +179,20 @@ Open items, in order:
   social preview in the GitHub UI (§10) after eyeballing it. Icons sit in the
   SW shell; nothing has shipped, so no triplet bump — any staging device that
   cached 1.0.0 refreshes when sw.js next changes.
-- Noah asked why the Worker runtime secrets go in the HUB. Answer given:
-  Actions secrets never cross repos, and the deploy workflow lives in the hub
-  (his 2026-07-25 call, since it held the Cloudflare tokens). Standing offer:
-  move `deploy-myfax.yml` into MyFax and put the two Cloudflare tokens +
-  account id in MyFax's secrets instead — his call, not made yet.
+- Noah asked why the Worker runtime secrets go in the HUB, then asked for the
+  *proper* architecture. **Decision implemented (supersedes the hub-deploys
+  arrangement)**: MyFax owns its deploy — new `.github/workflows/deploy.yml`
+  in THIS repo (dispatch input: branch; no fax_key, no secret-push step);
+  the hub's `deploy-myfax.yml` is deleted (hub branch
+  `claude/myfax-notes-handoff-0pmsmy`). Secrets live closest to use:
+  GitHub (MyFax) holds only the deploy credentials — `CLOUDFLARE_API_TOKEN`
+  (Pages-scoped), `CLOUDFLARE_WORKER_API_TOKEN` (Workers Scripts: Edit),
+  `CLOUDFLARE_ACCOUNT_ID` — and the Worker's RUNTIME secrets
+  (`FAXDROP_API_KEY`, `SENDER_EMAIL`, `ACCESS_CODE`) are set ONCE by Noah in
+  the Cloudflare dashboard (Workers & Pages → fax-relay → Settings →
+  Variables and Secrets); wrangler deploys preserve them. GitHub never holds
+  the live fax key. The hub no longer needs ANY MyFax secret. CI smoke keeps
+  its own `FAXDROP_TEST_API_KEY`/`SENDER_EMAIL` in MyFax secrets, unchanged.
+  NOTE: `workflow_dispatch` only appears in the Actions UI once the workflow
+  file is on the DEFAULT branch — merge this branch to `main` (and `staging`)
+  before dispatching.

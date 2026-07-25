@@ -1,0 +1,77 @@
+name: Deploy
+
+# MyFax deploys itself: the PWA to Cloudflare Pages (staging ->
+# staging.myfax.pages.dev preview, main -> myfax.pages.dev production) and
+# the relay Worker. Deploy credentials are THIS repo's secrets:
+#   CLOUDFLARE_API_TOKEN         Pages-scoped token
+#   CLOUDFLARE_WORKER_API_TOKEN  Workers Scripts: Edit token, nothing else
+#   CLOUDFLARE_ACCOUNT_ID
+#
+# The Worker's RUNTIME secrets (FAXDROP_API_KEY, SENDER_EMAIL, ACCESS_CODE)
+# are deliberately NOT here. They live in Cloudflare itself — dashboard:
+# Workers & Pages -> fax-relay -> Settings -> Variables and Secrets — set
+# once by Noah; wrangler deploys preserve them. GitHub never holds the live
+# fax key. (The CI smoke test keeps its own FAXDROP_TEST_API_KEY secret.)
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to deploy"
+        type: choice
+        options: [staging, main]
+        default: staging
+
+concurrency:
+  group: deploy-myfax
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.branch }}
+
+      - name: Prepare Cloudflare credentials
+        id: cf
+        env:
+          RAW_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RAW_WORKER_TOKEN: ${{ secrets.CLOUDFLARE_WORKER_API_TOKEN }}
+          RAW_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Strip whitespace/newlines that sneak in when a secret is pasted —
+          # a trailing newline corrupts the Authorization header (Cloudflare 6111).
+          TOKEN=$(printf '%s' "$RAW_TOKEN" | tr -d '[:space:]')
+          WTOKEN=$(printf '%s' "$RAW_WORKER_TOKEN" | tr -d '[:space:]')
+          ACCOUNT=$(printf '%s' "$RAW_ACCOUNT" | tr -d '[:space:]')
+          echo "::add-mask::$TOKEN"
+          echo "::add-mask::$WTOKEN"
+          echo "::add-mask::$ACCOUNT"
+          missing=""
+          [ -z "$TOKEN" ] && missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -z "$WTOKEN" ] && missing="$missing CLOUDFLARE_WORKER_API_TOKEN"
+          [ -z "$ACCOUNT" ] && missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "Missing repo secret(s):$missing — add them under Settings -> Secrets and variables -> Actions." >&2
+            exit 1
+          fi
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "worker_token=$WTOKEN" >> "$GITHUB_OUTPUT"
+          echo "account=$ACCOUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy PWA to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ steps.cf.outputs.token }}
+          accountId: ${{ steps.cf.outputs.account }}
+          command: pages deploy public --project-name=myfax --branch=${{ inputs.branch }} --commit-dirty=true
+
+      - name: Deploy relay Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ steps.cf.outputs.worker_token }}
+          accountId: ${{ steps.cf.outputs.account }}
+          workingDirectory: worker
+          command: deploy
