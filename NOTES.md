@@ -39,6 +39,7 @@ Promoted only with a locator, per the family evidence discipline.
 | F9 | **Official API contract** (supersedes F2–F4 where they conflict): send fields are `file` (PDF/JPEG/PNG only, **max 4 MB**), `recipientNumber` (E.164, US+Canada only), **required** `senderName` + `senderEmail`; optional `sendEmail`, `coverNote` (≤500), `recipientName`, `subject`, `senderCompany`, `senderPhone`. Success `{ success, faxId, deliveryEmail }`. Status response `{ status, pages, completedAt, error, errorCode, errorType }`; terminal success is **`completed`**; `partial` exists; provider `unknown` = retry with backoff. Read-only `GET /api/v1/account/balance` and `/api/v1/faxes`. Rate limits: send 10/min·30/hr·500/day, status/balance 60/min·500/hr·2000/day; upstream (Sinch) status refresh ≤ every 10 s per fax. **Never auto-retry a send after timeout/500 — duplicate risk.** Sandbox: `fd_test_` keys, synthetic `fdtest_` faxes, isolated from live. Changelog: faxdrop.com/for-developers/changelog | FaxDrop's official AI-agent API doc, retrieved by Noah from the dashboard and pasted 2026-07-25 | 2026-07-25 |
 | F10 | Corrections F9 forced: F2's field name was wrong (`to` → `recipientNumber`) and DOCX is NOT accepted (convert to PDF); F3's terminal wording `delivered` → `completed`; F4's "10/min all endpoints" was only the send limit — status polling is 60/min but capped by the 10 s upstream refresh. Code updated accordingly, same day | this ledger; commit history | 2026-07-25 |
 | F11 | **Sandbox round-trip VERIFIED against FaxDrop's live servers**: `POST /api/send-fax` with `recipientNumber`/`senderName`/`senderEmail` → 200 `{ success, faxId: fdtest_… }`; `GET /api/v1/fax/{id}` → 200 `completed`. Balance on a test key → 400 (test/live isolation) | CI run 30168093917 (`checks` workflow, MyFax), 2026-07-25 | 2026-07-25 |
+| F12 | **Relay security hardening**: (1) `[[ratelimits]]` bindings `SEND_RL` (6/min, key `"send"`) + `DEST_RL` (3/min, key = destination number) gate `/api/send` and FAIL CLOSED — an unbound or throwing limiter returns 503, never sends; a leaked access code can no longer burn quota or metered money. (2) Auth fails closed: no `ACCESS_CODE` set → 503 (was: open relay); CORS default is deny, not `*`. (3) Access code compared constant-time via SHA-256 digests (native `crypto.subtle`, no dep). (4) Telnyx refuses to stage in the public R2 bucket unless `MEDIA_TTL_CONFIRMED=true`, and path-strips the filename. All eight behaviors proven in `tools/worker-selftest.mjs` (offline, no network). Native binding needs Wrangler ≥ 4.36.0 — hub pins 4.114.0, so satisfied | worker/src/index.js, worker/wrangler.toml, tools/worker-selftest.mjs; commit history | 2026-08-01 |
 
 ## Unverified / still open
 
@@ -50,7 +51,14 @@ Promoted only with a locator, per the family evidence discipline.
   one of the month's 2 free faxes, only on Noah's say-so.
 - The **Telnyx adapter** is unexercised end-to-end (needs a paid account,
   R2 bucket, owned number). Treat as scaffolding until proven. Note it does
-  not satisfy FaxDrop's cover-sheet fields — it has none.
+  not satisfy FaxDrop's cover-sheet fields — it has none. Before enabling it,
+  the R2 `outbound/` lifecycle-expiry rule (F12) must exist, then set
+  `MEDIA_TTL_CONFIRMED=true` — until then the Worker refuses every Telnyx send.
+- The **`[[ratelimits]]` bindings on a live deploy** (F12) are verified only
+  offline, with stubs. The native binding is created implicitly on
+  `wrangler deploy`, but that a first deploy binds cleanly and enforces the
+  per-location limit must be confirmed on Noah's actual deploy. Failure mode is
+  safe (Worker fails closed → 503, faxing stops until fixed), not open.
 
 ## Doctrine §1 deviation (accepted, bounded)
 

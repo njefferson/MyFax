@@ -95,7 +95,19 @@ const telnyx = {
     if (!env.MEDIA || !env.MEDIA_PUBLIC_BASE) {
       throw new ProviderError(500, { error: 'Telnyx needs the MEDIA R2 binding and MEDIA_PUBLIC_BASE.' });
     }
-    const key = `outbound/${crypto.randomUUID()}-${filename}`;
+    // Telnyx fetches the document from a PUBLIC URL, and this relay is stateless
+    // (CLAUDE.md §1) — it keeps no key→id map, so it cannot delete the object
+    // afterward. The only reliable cleanup is an R2 bucket lifecycle rule that
+    // auto-expires the `outbound/` prefix. Refuse to stage a (usually sensitive)
+    // fax in a public bucket until the operator has set that rule and confirmed
+    // it here — a gate, not a good intention (Doctrine §16.8). See NOTES.md F11.
+    if (env.MEDIA_TTL_CONFIRMED !== 'true') {
+      throw new ProviderError(500, { error: 'Refusing to stage a fax in a public R2 bucket with no confirmed expiry. Add a lifecycle rule expiring the "outbound/" prefix (e.g. 1 day), then set MEDIA_TTL_CONFIRMED=true.' });
+    }
+    // Unguessable key: a random UUID first, and the caller-supplied filename
+    // stripped of path separators so it cannot reshape the object path.
+    const safeName = String(filename).replace(/[/\\]/g, '_');
+    const key = `outbound/${crypto.randomUUID()}-${safeName}`;
     await env.MEDIA.put(key, bytes, { httpMetadata: { contentType } });
     const mediaUrl = `${env.MEDIA_PUBLIC_BASE.replace(/\/$/, '')}/${key}`;
 
@@ -167,9 +179,12 @@ async function safeJson(res) {
    listed origin, so foreign pages fail the browser's CORS check. This blocks
    other websites' JS — the access code is what blocks direct (curl) abuse. */
 function cors(request, env) {
-  const allowed = String(env.ALLOWED_ORIGIN || '*').split(',').map((s) => s.trim()).filter(Boolean);
+  // Default is DENY, not "*". An unset ALLOWED_ORIGIN yields no allowed origin,
+  // so browser calls fail the CORS check — a misconfigured deploy fails closed.
+  // "*" is still honored only if explicitly set (it is not, in wrangler.toml).
+  const allowed = String(env.ALLOWED_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
   const origin = request.headers.get('Origin') || '';
-  const allow = allowed.includes('*') ? '*' : (allowed.includes(origin) ? origin : allowed[0]);
+  const allow = allowed.includes('*') ? '*' : (allowed.includes(origin) ? origin : (allowed[0] || 'null'));
   return {
     'Access-Control-Allow-Origin': allow,
     'Access-Control-Allow-Headers': 'Content-Type, X-Access-Code',
@@ -185,10 +200,48 @@ function json(data, headers, status = 200) {
   });
 }
 
-/** Keeps the relay from being an open fax gun. Client sends X-Access-Code. */
-function authorized(request, env) {
-  if (!env.ACCESS_CODE) return true;
-  return request.headers.get('X-Access-Code') === env.ACCESS_CODE;
+/** Constant-time string equality. Both sides are SHA-256'd first, so the
+ *  compare runs over fixed-length digests and leaks neither the length nor the
+ *  content of the secret through timing. crypto.subtle is native to Workers —
+ *  no dependency. */
+async function constantTimeEqual(a, b) {
+  const enc = new TextEncoder();
+  const [ha, hb] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(String(a))),
+    crypto.subtle.digest('SHA-256', enc.encode(String(b))),
+  ]);
+  const va = new Uint8Array(ha);
+  const vb = new Uint8Array(hb);
+  let diff = 0;
+  for (let i = 0; i < va.length; i++) diff |= va[i] ^ vb[i];
+  return diff === 0;
+}
+
+/** Keeps the relay from being an open fax gun. Client sends X-Access-Code.
+ *  FAILS CLOSED: a request with no matching code is rejected. The separate
+ *  "is ACCESS_CODE even set" check lives in fetch(), so a deploy that forgets
+ *  the secret returns a clear 503 instead of silently accepting everyone —
+ *  the old `if (!env.ACCESS_CODE) return true` was an open relay one missing
+ *  secret away (Doctrine §16.4/§16.5). */
+async function authorized(request, env) {
+  if (!env.ACCESS_CODE) return false;
+  return constantTimeEqual(request.headers.get('X-Access-Code') || '', env.ACCESS_CODE);
+}
+
+/** Rate-limit gate for the money path. Backed by Cloudflare's native Rate
+ *  Limiting binding (env[binding].limit) — which stores nothing we own, so the
+ *  relay's "streams through, stores nothing" promise (CLAUDE.md §1) holds.
+ *  FAILS CLOSED: an unbound or throwing limiter returns not-ok, because a fax
+ *  costs money and "we can't verify the rate" must mean "don't send". */
+async function rateLimitOk(env, binding, key) {
+  const rl = env[binding];
+  if (!rl || typeof rl.limit !== 'function') return { ok: false, reason: 'unconfigured' };
+  try {
+    const { success } = await rl.limit({ key });
+    return { ok: !!success, reason: success ? 'ok' : 'exceeded' };
+  } catch {
+    return { ok: false, reason: 'error' };
+  }
 }
 
 /** E.164-ish. Strips formatting, requires 10 or 11 digits for NANP. */
@@ -216,7 +269,14 @@ export default {
       return json({ ok: true, provider: providerName, statuses: NORMALIZED }, ch);
     }
 
-    if (!authorized(request, env)) {
+    // Fail closed on a misconfigured deploy: no access code set means every
+    // gated route is disabled, with an operator-clear message — NOT a silent
+    // open relay, and NOT a misleading "wrong code" shown to a user.
+    if (!env.ACCESS_CODE) {
+      return json({ error: 'This relay is not configured (no access code is set), so sending is disabled. This is a deploy misconfiguration, not a wrong code.' }, ch, 503);
+    }
+
+    if (!(await authorized(request, env))) {
       return json({ error: 'Access code rejected. Check the code in Settings.' }, ch, 401);
     }
 
@@ -229,6 +289,23 @@ export default {
         if (!to) return json({ error: 'Fax number must be 10 digits, or +country code.' }, ch, 400);
         if (!file || typeof file === 'string') return json({ error: 'Attach a file to send.' }, ch, 400);
         if (file.size > 4 * 1024 * 1024) return json({ error: 'File is over FaxDrop’s 4 MB limit.' }, ch, 400);
+
+        // Rate limit the money path. Two gates, both fail closed:
+        //   SEND_RL  key "send"  — total sends/min per location (the fax-gun brake)
+        //   DEST_RL  key <to>    — sends/min to any one number (anti-harassment)
+        // A leaked access code can no longer burn the provider quota or, on a
+        // metered provider, real money. 429 = slow down and retry; 503 = the
+        // limiter is unbound/broken and we refuse to send rather than guess.
+        const total = await rateLimitOk(env, 'SEND_RL', 'send');
+        if (!total.ok) {
+          if (total.reason === 'exceeded') return json({ error: 'This relay is sending too fast right now. Wait a minute and try again.' }, ch, 429);
+          return json({ error: 'Sending is temporarily disabled: the relay’s rate limiter is not configured. This is a deploy problem, not your fault.' }, ch, 503);
+        }
+        const perDest = await rateLimitOk(env, 'DEST_RL', to);
+        if (!perDest.ok) {
+          if (perDest.reason === 'exceeded') return json({ error: 'Too many faxes to this number in the last minute. Wait a moment and try again.' }, ch, 429);
+          return json({ error: 'Sending is temporarily disabled: the relay’s rate limiter is not configured. This is a deploy problem, not your fault.' }, ch, 503);
+        }
 
         const bytes = new Uint8Array(await file.arrayBuffer());
         const result = await adapter.send({

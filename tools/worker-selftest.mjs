@@ -32,7 +32,12 @@ globalThis.fetch = async (url, init = {}) => {
   return new Response(JSON.stringify({ error: 'unexpected upstream call' }), { status: 500 });
 };
 
-const env = { FAXDROP_API_KEY: 'fd_test', ACCESS_CODE: 'letmein', PROVIDER: 'faxdrop', SENDER_EMAIL: 'owner@example.com', SENDER_NAME: 'Fax Relay', ALLOWED_ORIGIN: 'https://example.pages.dev, https://staging.example.pages.dev' };
+// Rate-limit binding stubs. The native binding is not available in Node, so
+// the tests inject these — allow by default, deny/throw where a test needs it.
+const allowLimiter = { limit: async () => ({ success: true }) };
+const denyLimiter = { limit: async () => ({ success: false }) };
+
+const env = { FAXDROP_API_KEY: 'fd_test', ACCESS_CODE: 'letmein', PROVIDER: 'faxdrop', SENDER_EMAIL: 'owner@example.com', SENDER_NAME: 'Fax Relay', ALLOWED_ORIGIN: 'https://example.pages.dev, https://staging.example.pages.dev', SEND_RL: allowLimiter, DEST_RL: allowLimiter };
 const base = 'https://relay.test';
 const call = (path, init) => worker.fetch(new Request(base + path, init), env);
 
@@ -52,6 +57,13 @@ res = await call('/api/status?id=x');
 check('missing access code -> 401', res.status === 401);
 res = await call('/api/status?id=x', { headers: { 'X-Access-Code': 'wrong' } });
 check('wrong access code -> 401', res.status === 401);
+// constant-time compare must still reject a same-length wrong code
+res = await call('/api/status?id=x', { headers: { 'X-Access-Code': 'letmei_' } });
+check('same-length wrong code -> 401', res.status === 401);
+
+// fail-closed CORS: an unset ALLOWED_ORIGIN must DENY (not echo "*")
+res = await worker.fetch(new Request(base + '/api/health', { headers: { Origin: 'https://evil.example.com' } }), { ...env, ALLOWED_ORIGIN: '' });
+check('unset ALLOWED_ORIGIN denies foreign origin (not *)', res.headers.get('Access-Control-Allow-Origin') === 'null', res.headers.get('Access-Control-Allow-Origin'));
 
 // send validation
 const auth = { 'X-Access-Code': 'letmein' };
@@ -86,6 +98,48 @@ check('send carries senderEmail', sentForm?.get('senderEmail') === 'owner@exampl
 res = await worker.fetch(new Request(base + '/api/send', { method: 'POST', body: form, headers: auth }), { ...env, SENDER_EMAIL: '' });
 body = await res.json();
 check('missing SENDER_EMAIL -> clear error', res.status === 502 && /SENDER_EMAIL/.test(body.error), JSON.stringify(body));
+
+// ---- Security hardening: rate limits, fail-closed auth, Telnyx guard ----
+// Fresh success stub so these assertions do not depend on prior fetch state.
+globalThis.fetch = async (url) => {
+  const u = String(url);
+  if (u.endsWith('/api/send-fax')) return new Response(JSON.stringify({ success: true, faxId: 'fax_rl' }), { status: 200 });
+  return new Response(JSON.stringify({ data: { id: 'tnx_rl', status: 'queued' }, status: 'queued', pages: 1 }), { status: 200 });
+};
+const mkSend = () => { const f = new FormData(); f.append('to', '5551234567'); f.append('file', new Blob(['%PDF-1.4'], { type: 'application/pdf' }), 'd.pdf'); return f; };
+const sendWith = (e) => worker.fetch(new Request(base + '/api/send', { method: 'POST', body: mkSend(), headers: auth }), e);
+
+res = await sendWith({ ...env, SEND_RL: denyLimiter });
+check('SEND_RL exceeded -> 429', res.status === 429, String(res.status));
+res = await sendWith({ ...env, DEST_RL: denyLimiter });
+check('DEST_RL exceeded -> 429', res.status === 429, String(res.status));
+res = await sendWith({ ...env, SEND_RL: undefined });
+check('unbound rate limiter -> 503 (fail closed, does NOT send)', res.status === 503, String(res.status));
+res = await sendWith({ ...env, SEND_RL: { limit: async () => { throw new Error('rl down'); } } });
+check('throwing rate limiter -> 503 (fail closed)', res.status === 503, String(res.status));
+res = await sendWith({ ...env, ACCESS_CODE: '' });
+check('no ACCESS_CODE set -> 503, not an open relay', res.status === 503, String(res.status));
+res = await sendWith(env);
+body = await res.json();
+check('within limits + configured -> 200 send', res.status === 200 && body.id === 'fax_rl', JSON.stringify(body));
+
+// Telnyx must refuse a public-bucket stage until expiry is confirmed
+const telnyxEnv = { ...env, PROVIDER: 'telnyx', TELNYX_API_KEY: 'tnx', TELNYX_CONNECTION_ID: 'c', TELNYX_FROM: '+15550001111', MEDIA_PUBLIC_BASE: 'https://media.test', MEDIA: { put: async () => {} } };
+res = await sendWith(telnyxEnv);
+body = await res.json();
+check('Telnyx w/o MEDIA_TTL_CONFIRMED -> refused, no leak', res.status === 502 && /expiry|lifecycle|TTL_CONFIRMED/i.test(body.error), JSON.stringify(body));
+res = await sendWith({ ...telnyxEnv, MEDIA_TTL_CONFIRMED: 'true' });
+check('Telnyx with confirmed expiry -> proceeds', res.status === 200, String(res.status));
+
+// restore the FaxDrop stub for the remaining status/balance/error tests
+globalThis.fetch = async (url, init = {}) => {
+  calls.push({ url: String(url), init });
+  const u = String(url);
+  if (u.endsWith('/api/send-fax')) return new Response(JSON.stringify({ success: true, faxId: 'fax_test123', deliveryEmail: 'enabled' }), { status: 200 });
+  if (u.includes('/api/v1/fax/')) return new Response(JSON.stringify({ status: 'completed', pages: 2, completedAt: 'now' }), { status: 200 });
+  if (u.includes('/api/v1/account/balance')) return new Response(JSON.stringify({ monthlyRemaining: 2 }), { status: 200 });
+  return new Response(JSON.stringify({ error: 'unexpected upstream call' }), { status: 500 });
+};
 
 // status path + mapping ("completed" is FaxDrop's terminal success)
 calls.length = 0;
