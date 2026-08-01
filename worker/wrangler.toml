@@ -2,6 +2,22 @@ name = "fax-relay"
 main = "src/index.js"
 compatibility_date = "2026-07-01"
 
+# Rate limiting — Cloudflare's native binding (Wrangler >= 4.36.0; the hub pins
+# 4.114.0). period must be 10 or 60; limits are per-Cloudflare-location, which
+# is right for a family in one region. These bind env.SEND_RL / env.DEST_RL;
+# the Worker FAILS CLOSED if they are absent, so removing them disables sending.
+#   SEND_RL  key "send"   — total sends per minute (the fax-gun brake; < FaxDrop's 10/min)
+#   DEST_RL  key <number> — sends per minute to any one number (anti-harassment)
+[[ratelimits]]
+name = "SEND_RL"
+namespace_id = "2001"
+simple = { limit = 6, period = 60 }
+
+[[ratelimits]]
+name = "DEST_RL"
+namespace_id = "2002"
+simple = { limit = 3, period = 60 }
+
 [vars]
 PROVIDER = "faxdrop"          # "faxdrop" | "telnyx"
 # Comma-separated origin allowlist: only the app itself may call the relay
@@ -13,6 +29,13 @@ SENDER_NAME = "Fax Relay"     # appears on FaxDrop's cover page
 # TELNYX_CONNECTION_ID = ""
 # TELNYX_FROM = "+15550001111"
 # MEDIA_PUBLIC_BASE = "https://media.example.com"
+#
+# REQUIRED before enabling Telnyx: the relay stages each document in this PUBLIC
+# bucket for Telnyx to fetch and, being stateless, cannot delete it afterward.
+# Add an R2 lifecycle rule that expires the "outbound/" prefix (e.g. 1 day) so
+# faxed documents do not accumulate world-readable forever, THEN set the var
+# below. Until it is "true", the Worker refuses every Telnyx send (see index.js).
+# MEDIA_TTL_CONFIRMED = "true"
 #
 # [[r2_buckets]]
 # binding = "MEDIA"
