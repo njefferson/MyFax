@@ -100,7 +100,7 @@ const telnyx = {
     // afterward. The only reliable cleanup is an R2 bucket lifecycle rule that
     // auto-expires the `outbound/` prefix. Refuse to stage a (usually sensitive)
     // fax in a public bucket until the operator has set that rule and confirmed
-    // it here — a gate, not a good intention (Doctrine §16.8). See NOTES.md F11.
+    // it here — a gate, not a good intention (Doctrine §16.8). See NOTES.md F12.
     if (env.MEDIA_TTL_CONFIRMED !== 'true') {
       throw new ProviderError(500, { error: 'Refusing to stage a fax in a public R2 bucket with no confirmed expiry. Add a lifecycle rule expiring the "outbound/" prefix (e.g. 1 day), then set MEDIA_TTL_CONFIRMED=true.' });
     }
