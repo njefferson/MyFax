@@ -24,21 +24,77 @@ reconnect (Background Sync where available, `online` listener otherwise).
 
 ## Verified-facts ledger
 
-Promoted only with a locator, per the family evidence discipline.
+Promoted only with a locator, per the family evidence discipline. Reformatted
+from a table on 2026-08-03 (Doctrine §2 — no grids anywhere Noah reads); every
+fact, locator, and date is unchanged.
 
-| # | Fact | Source / locator | Date |
-|---|------|------------------|------|
-| F1 | FaxDrop is a real service; free tier = 2 faxes/month, each ≤ 5 pages **including a forced cover page**; no card required | faxdrop.com `/free-fax`, `/for-developers` (via search excerpts; site blocks direct fetch from this sandbox) | 2026-07-25 |
-| F2 | Send endpoint: `POST /api/send-fax`, multipart, `X-API-Key` auth; accepts PDF/DOCX/JPEG/PNG | faxdrop.com `/for-developers`, `/blog/fax-api-guide` | 2026-07-25 |
-| F3 | Status endpoint: `GET /api/v1/fax/{id}`, `X-API-Key`; response has `id`, `status`, `recipientNumber`, `pages`, `completedAt`, `error` on failure | faxdrop.com `/blog/fax-for-ai-agents` (API example) | 2026-07-25 |
-| F4 | API rate limits: 10/min, 100/hr, 500/day — status polls count toward them (hence the 8s poll spacing in `app.js`) | same as F3 | 2026-07-25 |
-| F5 | Paid price $1.99/fax or volume credits; credits don't expire | faxdrop.com `/for-developers` | 2026-07-25 |
-| F6 | Twilio Programmable Fax is dead (sunset 2021-12-17); ignore tutorials built on it | Twilio changelog (well-established) | 2026-07-25 |
-| F7 | Free tier includes API access: sign in with Google → account dashboard → "API Keys" → Generate New Key; key shown ONCE at creation; up to 3 active keys | faxdrop.com `/for-developers` (via search excerpt) | 2026-07-25 |
-| F8 | Test recipient without owning a fax number: faxbeep.com publishes free test numbers and shows the received fax online in ~1–2 min — but received faxes are PUBLIC for 30 days, so test pages only. HP (1-888-473-2963) and Canon (1-855-FX-CANON) test lines only confirm by faxing BACK, useless without a receive number | faxbeep.com, techrepublic.com/article/free-test-fax | 2026-07-25 |
-| F9 | **Official API contract** (supersedes F2–F4 where they conflict): send fields are `file` (PDF/JPEG/PNG only, **max 4 MB**), `recipientNumber` (E.164, US+Canada only), **required** `senderName` + `senderEmail`; optional `sendEmail`, `coverNote` (≤500), `recipientName`, `subject`, `senderCompany`, `senderPhone`. Success `{ success, faxId, deliveryEmail }`. Status response `{ status, pages, completedAt, error, errorCode, errorType }`; terminal success is **`completed`**; `partial` exists; provider `unknown` = retry with backoff. Read-only `GET /api/v1/account/balance` and `/api/v1/faxes`. Rate limits: send 10/min·30/hr·500/day, status/balance 60/min·500/hr·2000/day; upstream (Sinch) status refresh ≤ every 10 s per fax. **Never auto-retry a send after timeout/500 — duplicate risk.** Sandbox: `fd_test_` keys, synthetic `fdtest_` faxes, isolated from live. Changelog: faxdrop.com/for-developers/changelog | FaxDrop's official AI-agent API doc, retrieved by Noah from the dashboard and pasted 2026-07-25 | 2026-07-25 |
-| F10 | Corrections F9 forced: F2's field name was wrong (`to` → `recipientNumber`) and DOCX is NOT accepted (convert to PDF); F3's terminal wording `delivered` → `completed`; F4's "10/min all endpoints" was only the send limit — status polling is 60/min but capped by the 10 s upstream refresh. Code updated accordingly, same day | this ledger; commit history | 2026-07-25 |
-| F11 | **Sandbox round-trip VERIFIED against FaxDrop's live servers**: `POST /api/send-fax` with `recipientNumber`/`senderName`/`senderEmail` → 200 `{ success, faxId: fdtest_… }`; `GET /api/v1/fax/{id}` → 200 `completed`. Balance on a test key → 400 (test/live isolation) | CI run 30168093917 (`checks` workflow, MyFax), 2026-07-25 | 2026-07-25 |
+**F1** (2026-07-25) — FaxDrop is a real service; free tier = 2 faxes/month,
+each ≤ 5 pages **including a forced cover page**; no card required.
+Source: faxdrop.com `/free-fax`, `/for-developers` (via search excerpts; site
+blocks direct fetch from this sandbox).
+
+**F2** (2026-07-25) — Send endpoint: `POST /api/send-fax`, multipart,
+`X-API-Key` auth; accepts PDF/DOCX/JPEG/PNG.
+Source: faxdrop.com `/for-developers`, `/blog/fax-api-guide`.
+
+**F3** (2026-07-25) — Status endpoint: `GET /api/v1/fax/{id}`, `X-API-Key`;
+response has `id`, `status`, `recipientNumber`, `pages`, `completedAt`,
+`error` on failure.
+Source: faxdrop.com `/blog/fax-for-ai-agents` (API example).
+
+**F4** (2026-07-25) — API rate limits: 10/min, 100/hr, 500/day — status polls
+count toward them (hence the 8s poll spacing in `app.js`).
+Source: same as F3.
+
+**F5** (2026-07-25) — Paid price $1.99/fax or volume credits; credits don't
+expire.
+Source: faxdrop.com `/for-developers`.
+
+**F6** (2026-07-25) — Twilio Programmable Fax is dead (sunset 2021-12-17);
+ignore tutorials built on it.
+Source: Twilio changelog (well-established).
+
+**F7** (2026-07-25) — Free tier includes API access: sign in with Google →
+account dashboard → "API Keys" → Generate New Key; key shown ONCE at
+creation; up to 3 active keys.
+Source: faxdrop.com `/for-developers` (via search excerpt).
+
+**F8** (2026-07-25) — Test recipient without owning a fax number: faxbeep.com
+publishes free test numbers and shows the received fax online in ~1–2 min —
+but received faxes are PUBLIC for 30 days, so test pages only. HP
+(1-888-473-2963) and Canon (1-855-FX-CANON) test lines only confirm by faxing
+BACK, useless without a receive number.
+Source: faxbeep.com, techrepublic.com/article/free-test-fax.
+
+**F9** (2026-07-25) — **Official API contract** (supersedes F2–F4 where they
+conflict): send fields are `file` (PDF/JPEG/PNG only, **max 4 MB**),
+`recipientNumber` (E.164, US+Canada only), **required** `senderName` +
+`senderEmail`; optional `sendEmail`, `coverNote` (≤500), `recipientName`,
+`subject`, `senderCompany`, `senderPhone`. Success `{ success, faxId,
+deliveryEmail }`. Status response `{ status, pages, completedAt, error,
+errorCode, errorType }`; terminal success is **`completed`**; `partial`
+exists; provider `unknown` = retry with backoff. Read-only
+`GET /api/v1/account/balance` and `/api/v1/faxes`. Rate limits: send
+10/min·30/hr·500/day, status/balance 60/min·500/hr·2000/day; upstream (Sinch)
+status refresh ≤ every 10 s per fax. **Never auto-retry a send after
+timeout/500 — duplicate risk.** Sandbox: `fd_test_` keys, synthetic `fdtest_`
+faxes, isolated from live. Changelog: faxdrop.com/for-developers/changelog.
+Source: FaxDrop's official AI-agent API doc, retrieved by Noah from the
+dashboard and pasted 2026-07-25.
+
+**F10** (2026-07-25) — Corrections F9 forced: F2's field name was wrong
+(`to` → `recipientNumber`) and DOCX is NOT accepted (convert to PDF); F3's
+terminal wording `delivered` → `completed`; F4's "10/min all endpoints" was
+only the send limit — status polling is 60/min but capped by the 10 s
+upstream refresh. Code updated accordingly, same day.
+Source: this ledger; commit history.
+
+**F11** (2026-07-25) — **Sandbox round-trip VERIFIED against FaxDrop's live
+servers**: `POST /api/send-fax` with
+`recipientNumber`/`senderName`/`senderEmail` → 200 `{ success, faxId:
+fdtest_… }`; `GET /api/v1/fax/{id}` → 200 `completed`. Balance on a test key
+→ 400 (test/live isolation).
+Source: CI run 30168093917 (`checks` workflow, MyFax), 2026-07-25.
 
 ## Unverified / still open
 
@@ -131,8 +187,9 @@ Open items, in order:
 3. **On-device pass** (Doctrine §7) on staging — then Noah's explicit
    "promote" = dispatch Deploy MyFax with branch=main (and fax_key=live when
    he says so; `skip` leaves the Worker's current key alone).
-4. **1.0.0 needs its NAME from Noah** (Doctrine §7 — never invent). Goes in
-   the CHANGELOG heading as `1.0.0 "…"`.
+4. ~~1.0.0 needs its NAME from Noah~~ **WITHDRAWN 2026-08-03**: Doctrine §7
+   (rewritten 2026-07-28) says releases have no names, ever — never ask for
+   one. The heading stays plain `1.0.0`.
 5. **Repo metadata** (§10, Noah pastes in GitHub UI, confirm each):
    description "Free fax from your phone — an installable web app that sends
    a document to any fax number. No account, no subscription." · website
@@ -179,6 +236,38 @@ Open items, in order:
   social preview in the GitHub UI (§10) after eyeballing it. Icons sit in the
   SW shell; nothing has shipped, so no triplet bump — any staging device that
   cached 1.0.0 refreshes when sw.js next changes.
+### Update — 2026-08-03, same branch (after reviewing nine days of new hub docs)
+
+The hub gained (2026-07-26 → 08-03): DOCTRINE.md at 1,013 lines (new §0b, §2
+grid ban, §5b, §7b–§7f, §14, §15/§15b, §16), LESSONS.md (canonical, 2,919
+lines), METADATA.md (canonical §10 values, proposed/set per item), PALETTES.md
++ palette-check.mjs, ACCESSIBILITY.md + a11y-gate.mjs, docs-check.mjs (the
+no-grid gate). Actions taken here:
+
+- **De-tabled** NOTES.md ledger, ACCESSIBILITY.md register, README providers
+  (docs-check now passes; content unchanged, reformat noted in each file).
+- **Withdrew the release-name request** — §7 (2026-07-28): releases have no
+  names, never ask. Handoff item 4 struck.
+- **Rewrote `.github/workflows/deploy.yml`** to the 2026-07-28 hardened
+  standard: SHA-pinned actions, pinned wrangler 4.114.0, credentials via
+  GITHUB_ENV not step outputs (§16.4), `permissions: contents: read`,
+  `persist-credentials: false`, typed `confirm_production=MAIN` gate for
+  branch=main (§16.5), shared never-cancelling concurrency group (hub lesson
+  2026-07-30). Architecture unchanged: MyFax deploys itself, runtime secrets
+  live in Cloudflare (§16.2-aligned), two-token split preserved (§16.4).
+- **Hub branch rebased onto current main** (the old deploy-myfax.yml deletion
+  conflicted with its hardened 2026-07-28 revision; deletion stands — the
+  workflow now lives here) and **MyFax's §10 section added to METADATA.md**
+  (all items proposed; values no longer live in chat).
+- Still open from the new doctrine, scoped separately with Noah: §7b on-screen
+  version stamp, §7d patch notes, §7e (i) surface (the §1 deviation statement
+  moves there from the footer), §7f text diagnostic, §16.6 security headers,
+  palette JSON + hub palette-check run, coverage in the hub's shared
+  accessibility statement, MyFax's absence from the doctrine governed-apps
+  list. Also: MyFax staging took PR #1 (relay hardening — rate limits,
+  fail-closed auth, Telnyx leak guard) on 2026-08-01, unreviewed by this
+  branch; merge order at promote is staging-first.
+
 - Noah asked why the Worker runtime secrets go in the HUB, then asked for the
   *proper* architecture. **Decision implemented (supersedes the hub-deploys
   arrangement)**: MyFax owns its deploy — new `.github/workflows/deploy.yml`

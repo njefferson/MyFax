@@ -6,12 +6,14 @@ name: Deploy
 #   CLOUDFLARE_API_TOKEN         Pages-scoped token
 #   CLOUDFLARE_WORKER_API_TOKEN  Workers Scripts: Edit token, nothing else
 #   CLOUDFLARE_ACCOUNT_ID
+# The two-token split is deliberate (Doctrine §16.4) — never consolidate.
 #
 # The Worker's RUNTIME secrets (FAXDROP_API_KEY, SENDER_EMAIL, ACCESS_CODE)
 # are deliberately NOT here. They live in Cloudflare itself — dashboard:
 # Workers & Pages -> fax-relay -> Settings -> Variables and Secrets — set
 # once by Noah; wrangler deploys preserve them. GitHub never holds the live
-# fax key. (The CI smoke test keeps its own FAXDROP_TEST_API_KEY secret.)
+# fax key, and no secret ever meets an unpinned fetch (§16.2). The CI smoke
+# test keeps its own FAXDROP_TEST_API_KEY secret.
 
 on:
   workflow_dispatch:
@@ -21,18 +23,45 @@ on:
         type: choice
         options: [staging, main]
         default: staging
+      confirm_production:
+        description: "Only for branch=main: type MAIN to confirm a production deploy"
+        type: string
+        default: ""
 
+# One shared group, never cancelled: staging and main both deploy the same
+# Worker, and cancel-in-progress on a production deploy turns "promoted"
+# into a lie (hub LESSONS, 2026-07-30 — a cancelled run reads as neutral).
+# Dispatches queue instead.
 concurrency:
   group: deploy-myfax
   cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  WRANGLER_VERSION: "4.114.0"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - name: Confirm a production deploy was meant
+        if: inputs.branch == 'main'
+        env:
+          CONFIRM: ${{ inputs.confirm_production }}
+        run: |
+          # Doctrine §16.5 — friction in proportion to damage: production is
+          # one dropdown position from staging.
+          if [ "$CONFIRM" != "MAIN" ]; then
+            echo "branch=main deploys production. Re-run with confirm_production=MAIN." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: ${{ inputs.branch }}
+          persist-credentials: false
 
       - name: Prepare Cloudflare credentials
         id: cf
@@ -42,7 +71,10 @@ jobs:
           RAW_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           # Strip whitespace/newlines that sneak in when a secret is pasted —
-          # a trailing newline corrupts the Authorization header (Cloudflare 6111).
+          # a trailing newline corrupts the Authorization header (Cloudflare
+          # 6111). Cleaned values go to GITHUB_ENV, never step outputs:
+          # outputs persist in the run's stored output and are readable
+          # through the API (Doctrine §16.4).
           TOKEN=$(printf '%s' "$RAW_TOKEN" | tr -d '[:space:]')
           WTOKEN=$(printf '%s' "$RAW_WORKER_TOKEN" | tr -d '[:space:]')
           ACCOUNT=$(printf '%s' "$RAW_ACCOUNT" | tr -d '[:space:]')
@@ -57,21 +89,25 @@ jobs:
             echo "Missing repo secret(s):$missing — add them under Settings -> Secrets and variables -> Actions." >&2
             exit 1
           fi
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
-          echo "worker_token=$WTOKEN" >> "$GITHUB_OUTPUT"
-          echo "account=$ACCOUNT" >> "$GITHUB_OUTPUT"
+          {
+            echo "CF_TOKEN=$TOKEN"
+            echo "CF_WORKER_TOKEN=$WTOKEN"
+            echo "CF_ACCOUNT=$ACCOUNT"
+          } >> "$GITHUB_ENV"
 
       - name: Deploy PWA to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
         with:
-          apiToken: ${{ steps.cf.outputs.token }}
-          accountId: ${{ steps.cf.outputs.account }}
+          apiToken: ${{ env.CF_TOKEN }}
+          accountId: ${{ env.CF_ACCOUNT }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
           command: pages deploy public --project-name=myfax --branch=${{ inputs.branch }} --commit-dirty=true
 
       - name: Deploy relay Worker
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
         with:
-          apiToken: ${{ steps.cf.outputs.worker_token }}
-          accountId: ${{ steps.cf.outputs.account }}
+          apiToken: ${{ env.CF_WORKER_TOKEN }}
+          accountId: ${{ env.CF_ACCOUNT }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}
           workingDirectory: worker
           command: deploy

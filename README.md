@@ -90,15 +90,25 @@ FaxDrop key — that's the intended model, and this README is the instructions.
 Selected by the `PROVIDER` var. Both satisfy the same adapter contract
 (`send`, `status`), so switching is one line in `wrangler.toml` plus a secret.
 
-| | `faxdrop` (default) | `telnyx` |
-|---|---|---|
-| Cost | 2 faxes/month free (≤ 5 pages each), then $1.99/fax | ~$0.007/page, no minimum |
-| Cover page | always present; sender name/email required, counts against the 5 pages | n/a |
-| Files | PDF, JPEG, PNG — max 4 MB (convert Word to PDF first) | hosted URL |
-| Send rate limits | 10/min · 30/hr · 500/day (status polls: 60/min) | generous |
-| Destinations | US (50 states) + Canada, E.164 | worldwide |
-| Sandbox | `fd_test_` key: full flow, no real fax, no credits | n/a |
-| Extra setup | none | R2 bucket + public media base + owned DID |
+### `faxdrop` (default)
+
+- Cost: 2 faxes/month free (≤ 5 pages each), then $1.99/fax
+- Cover page: always present; sender name/email required, counts against the 5 pages
+- Files: PDF, JPEG, PNG — max 4 MB (convert Word to PDF first)
+- Send rate limits: 10/min · 30/hr · 500/day (status polls: 60/min)
+- Destinations: US (50 states) + Canada, E.164
+- Sandbox: `fd_test_` key — full flow, no real fax, no credits
+- Extra setup: none
+
+### `telnyx`
+
+- Cost: ~$0.007/page, no minimum
+- Cover page: none (does not satisfy FaxDrop-style cover fields)
+- Files: hosted URL (the Worker stages the upload in R2)
+- Send rate limits: generous
+- Destinations: worldwide
+- Sandbox: none
+- Extra setup: R2 bucket + public media base + owned DID
 
 Telnyx sends from a hosted URL rather than an upload, so the Worker stages the
 file in R2 and hands Telnyx the public link. Uncomment the Telnyx block in
