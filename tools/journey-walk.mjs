@@ -12,7 +12,7 @@ import { createServer } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
 
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.webmanifest': 'application/manifest+json', '.png': 'image/png' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.webmanifest': 'application/manifest+json', '.png': 'image/png' };
 
 // Static server for public/
 const app = createServer((req, res) => {
@@ -47,6 +47,12 @@ const check = (name, cond, detail = '') => { console.log(`${cond ? 'PASS' : 'FAI
 
 await page.goto('http://localhost:8080/', { waitUntil: 'networkidle' });
 check('app loads with lamp', await page.locator('#lamp').textContent() !== '');
+
+// First run: orientation appears once (§7e), closes from its own header,
+// and stays available behind the (i) afterwards.
+check('first-run orientation appears', await page.evaluate(() => document.getElementById('info').open));
+await page.locator('#info .sheet-head .sheet-close').click();
+check('orientation closed', await page.evaluate(() => !document.getElementById('info').open));
 
 // Not-linked honesty before setup
 check('unlinked state says so', /relay address/i.test(await page.locator('#note').textContent()));
@@ -86,6 +92,8 @@ check('no page errors', errs.length === 0, errs.join(' | '));
 await page.reload({ waitUntil: 'networkidle' });
 check('activity persists across reload', /delivered/i.test(await page.locator('#activity').textContent()));
 check('endpoint persists across reload', (await page.locator('#endpoint').inputValue()) === 'http://localhost:8090');
+check('orientation does not reopen on second visit', await page.evaluate(() => !document.getElementById('info').open));
+check('version stamp shows the running triplet', /\d+\.\d+\.\d+/.test(await page.locator('#stamp').textContent()));
 
 await browser.close(); app.close(); relay.close();
 console.log(failures ? `\n${failures} journey check(s) FAILED` : '\nPrimary journey walks clean.');

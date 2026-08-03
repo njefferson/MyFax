@@ -1,6 +1,11 @@
-// Cache name carries the release triplet — bump it together with CHANGELOG.md.
+// Cache name carries the release triplet — bump it together with version.js
+// and CHANGELOG.md (tools/version-sync.mjs fails the build if they drift).
+// The triplet is LITERAL here on purpose: importing it would leave this file
+// byte-identical between releases, and a service worker whose bytes never
+// change is never updated (hub LESSONS §21 — the cache that could only serve
+// its own release).
 const CACHE = 'fax-relay-1.0.0';
-const SHELL = ['./', './index.html', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable.png'];
+const SHELL = ['./', './index.html', './styles.css', './app.js', './version.js', './release-notes.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

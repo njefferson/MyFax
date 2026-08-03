@@ -12,6 +12,7 @@ const C = {
   ink: '#191C18',
   inkSoft: '#4E5148',
   inkFaint: '#6A6D60',
+  inkDim: '#484B42',
   housing: '#C3C0B2',
   panel: '#E6E4DA',
   paper: '#F2F0E7',
@@ -50,6 +51,12 @@ const PAIRS = [
   ['send button text on ink', C.paper, C.ink, 4.5],
   ['send button text on signal (hover)', C.paper, C.signal, 4.5],
   ['drop drag-over text on paper', C.signalDeep, C.paper, 4.5],
+  // §7b: the version stamp is dimmed with a TOKEN, never opacity, and its
+  // pair joins the gate in the same commit. ink-soft measured 4.43 on
+  // housing, hence the dedicated ink-dim.
+  ['version stamp (ink-dim) on housing', C.inkDim, C.housing, 4.5],
+  ['sheet body text on panel', C.ink, C.panel, 4.5],
+  ['diagnostic text on paper', C.ink, C.paper, 4.5],
   // non-text (3:1)
   ['lamp dot ready (signal) vs panel', C.signal, C.panel, 3],
   ['lamp dot working (amber) vs panel', C.amber, C.panel, 3],

@@ -12,6 +12,12 @@ jobs:
           node-version: 22
       - name: Computed contrast gate (Doctrine §4 — exits non-zero on any failure)
         run: node tools/contrast-gate.mjs
+      - name: Version sync (§7b — one triplet, four carriers)
+        run: node tools/version-sync.mjs
+      - name: No-grid gate (§2 — run from the hub, never forked)
+        run: |
+          curl -sSf -o /tmp/docs-check.mjs https://raw.githubusercontent.com/njefferson/noahjefferson/main/docs-check.mjs
+          node /tmp/docs-check.mjs .
       - name: Worker self-test (stubbed provider, no network)
         run: node tools/worker-selftest.mjs
       - name: FaxDrop sandbox smoke (real API, fd_test_ key, no fax sent; skips when secret absent)

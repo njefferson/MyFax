@@ -15,3 +15,11 @@ Send, and watch the transmission tape print each step until the carrier
 confirms delivery. If you're offline, the fax waits on your device and goes out
 by itself when you're back online. Your history stays on your phone; nothing is
 tracked.
+
+The ⓘ in the header carries everything about the app — what it is and is not,
+how your document travels, home-screen install steps for each platform, patch
+notes (rendered from `public/release-notes.js`, the one source), and a copyable
+diagnostic report, also reachable by tapping the version stamp at the bottom of
+the app. First open shows the same orientation once; closing it loses nothing.
+The deployed site ships security headers including a real
+Content-Security-Policy — styles and scripts are files, nothing inline.

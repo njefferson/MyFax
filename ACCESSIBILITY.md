@@ -57,3 +57,23 @@ FIXED — padding brings both ≥ 44px. Release: 1.0.0 (pre-release).
 
 Hidden file input had no accessible name.
 FIXED — `aria-label="Document to fax"`. Release: 1.0.0 (pre-release).
+
+## A-010 — found 2026-08-03
+
+The version stamp planned as `--ink-soft` on housing measured 4.43:1 —
+under AA 4.5:1 (computed, not eyeballed).
+FIXED before ship — dedicated `--ink-dim` #484B42 (4.87:1), pair added to
+the contrast gate in the same commit (Doctrine §7b: dimmed with a token,
+never opacity). Release: 1.0.0 (pre-release).
+
+## A-011 — found 2026-08-03
+
+At 320px × 200% text, the browser's own dialog `max-width:
+calc(100% - 6px - 2em)` narrowed the sheets until the header close button
+hung outside the dialog, where a tap could not reach it. Found by the
+a11y scan's hit test (elementFromPoint at the button's centre returned the
+dialog), not by eye.
+FIXED before ship — `max-width:none` with a width measured against the real
+viewport, title shrinks (`min-width:0`, ellipsis), close button `flex:none`.
+The scan now asserts hit-testability of every sheet's dismiss at
+small-phone-at-200%-text on every run. Release: 1.0.0 (pre-release).

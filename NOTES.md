@@ -259,14 +259,33 @@ no-grid gate). Actions taken here:
   conflicted with its hardened 2026-07-28 revision; deletion stands — the
   workflow now lives here) and **MyFax's §10 section added to METADATA.md**
   (all items proposed; values no longer live in chat).
-- Still open from the new doctrine, scoped separately with Noah: §7b on-screen
-  version stamp, §7d patch notes, §7e (i) surface (the §1 deviation statement
-  moves there from the footer), §7f text diagnostic, §16.6 security headers,
-  palette JSON + hub palette-check run, coverage in the hub's shared
-  accessibility statement, MyFax's absence from the doctrine governed-apps
-  list. Also: MyFax staging took PR #1 (relay hardening — rate limits,
-  fail-closed auth, Telnyx leak guard) on 2026-08-01, unreviewed by this
-  branch; merge order at promote is staging-first.
+- **The doctrine surfaces are BUILT (Noah's "Go", 2026-08-03)**, same branch:
+  §7b version stamp (boot-written from `public/version.js`, `--ink-dim` token
+  — ink-soft measured 4.43:1 on housing, see A-010 — selectable, opens the
+  diagnostic); §7e (i) surface in the header (what it is / is not — the §1
+  deviation statement moved there from the footer, which now just points at
+  it — named-platform install steps, patch notes, provider terms, report-a-
+  problem, accessibility + licence; first-run orientation is the same sheet
+  auto-opened once, so dismissing destroys nothing); §7d patch notes rendered
+  from `public/release-notes.js` (the one source, includes "still open");
+  §7f diagnostic report (diagnosis first, fax numbers masked to last two
+  digits, access code never included, script errors captured from boot);
+  §16.6 `public/_headers` with a real CSP (the inline stylesheet moved to
+  `styles.css`, type converted px→rem per §4 on the way). New gates:
+  `tools/version-sync.mjs` (one triplet, four carriers: version.js, sw.js
+  cache name — literal on purpose, hub LESSONS §21 — release-notes.js,
+  CHANGELOG); a11y-scan now audits the sheets OPEN, asserts the §4 dismiss
+  properties (top+bottom, hit-testable, bounded, gone after close) at phone
+  AND small-phone-at-200%-text, and exits non-zero on custom failures; CI
+  runs version-sync and the hub's docs-check (fetched, never forked).
+  The 200% pass caught a real bug before ship: the UA dialog max-width
+  pushed the close button outside the sheet (A-011).
+- Still open from the new doctrine: palette JSON + hub palette-check run,
+  coverage in the hub's shared accessibility statement, MyFax's absence from
+  the doctrine governed-apps list (hub edits). Also: MyFax staging took PR #1
+  (relay hardening — rate limits, fail-closed auth, Telnyx leak guard) on
+  2026-08-01, unreviewed by this branch; merge order at promote is
+  staging-first.
 
 - Noah asked why the Worker runtime secrets go in the HUB, then asked for the
   *proper* architecture. **Decision implemented (supersedes the hub-deploys

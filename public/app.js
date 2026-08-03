@@ -1,5 +1,15 @@
 /* Fax Relay — client. Holds no credentials; talks only to the relay Worker. */
 
+/* Script errors are captured from boot for the diagnostic report (§7f) —
+   wrapped before anything else runs, or the errors that matter most escape. */
+const bootErrors = [];
+{
+  const orig = console.error.bind(console);
+  console.error = (...a) => { bootErrors.push(a.map(String).join(' ').slice(0, 300)); if (bootErrors.length > 20) bootErrors.shift(); orig(...a); };
+  addEventListener('error', (e) => bootErrors.push(String(e.message || e.type).slice(0, 300)));
+  addEventListener('unhandledrejection', (e) => bootErrors.push(`unhandled: ${e.reason?.message || e.reason}`.slice(0, 300)));
+}
+
 const $ = (id) => document.getElementById(id);
 const els = {
   to: $('to'), file: $('file'), drop: $('drop'), dropText: $('dropText'),
@@ -335,6 +345,110 @@ if ('serviceWorker' in navigator) {
     if (e.data?.type === 'drain-queue') drainQueue();
   });
 }
+
+/* ---------- information surface + diagnostics (§7e, §7f) ---------- */
+const infoDlg = $('info');
+const diagDlg = $('diag');
+
+// The way out is wired FIRST (§14) — before any content renders, before
+// anything below can throw. Both closes per surface, plus the backdrop.
+for (const b of document.querySelectorAll('[data-close]')) {
+  b.addEventListener('click', () => $(b.dataset.close).close());
+}
+for (const d of [infoDlg, diagDlg]) {
+  d.addEventListener('click', (e) => { if (e.target === d) d.close(); });
+}
+
+const V = self.APP_VERSION || '0.0.0';
+// Boot-written (§7b), never on panel open; selectable via CSS.
+$('stamp').textContent = `Fax Relay ${V}`;
+
+$('infoBtn').addEventListener('click', () => infoDlg.showModal());
+$('stamp').addEventListener('click', openDiag);
+$('diagOpen').addEventListener('click', () => { infoDlg.close(); openDiag(); });
+
+// Patch notes render from the one source, release-notes.js (§7d).
+function renderNotes() {
+  const box = $('notes');
+  box.textContent = '';
+  for (const rel of (self.RELEASE_NOTES || []).slice(0, 6)) {
+    const h = document.createElement('p');
+    h.className = 'notes-v';
+    h.textContent = `${rel.version} — ${rel.kind}${rel.date ? ` — ${rel.date}` : ' — not yet released'}`;
+    const ul = document.createElement('ul');
+    for (const n of rel.notes) { const li = document.createElement('li'); li.textContent = n; ul.append(li); }
+    box.append(h, ul);
+    if (rel.known?.length) {
+      const k = document.createElement('p');
+      k.className = 'notes-k';
+      k.textContent = 'Still open:';
+      const ku = document.createElement('ul');
+      for (const n of rel.known) { const li = document.createElement('li'); li.textContent = n; ku.append(li); }
+      box.append(k, ku);
+    }
+  }
+}
+
+// Fax numbers are personal data: masked by default, all but the last two
+// digits (§7f — coarse by default). The full history stays in Activity.
+const maskTo = (s) => String(s || '').replace(/\d(?=(?:\D*\d){2})/g, '•');
+
+async function diagnosticText() {
+  const q = await allQueued().catch(() => []);
+  const sent = (await allSent().catch(() => [])).sort((a, b) => b.started - a.started).slice(0, 5);
+  const problems = [];
+  if (!cfg.endpoint) problems.push('Relay address is not set — sending is disabled until it is (Relay settings).');
+  if (!navigator.onLine) problems.push('This device is offline — new sends wait in the queue.');
+  if (q.length) problems.push(`${q.length} fax(es) waiting in the offline queue.`);
+  const bad = sent.find((r) => r.status === 'failed' || r.status === 'partial');
+  if (bad) problems.push(`Most recent problem send: ${bad.status}${bad.error ? ` — ${bad.error}` : ''}`);
+  if (bootErrors.length) problems.push(`${bootErrors.length} script error(s) since the app opened (listed below).`);
+  const cacheNames = 'caches' in self ? await caches.keys().catch(() => []) : [];
+  const est = navigator.storage?.estimate ? await navigator.storage.estimate().catch(() => null) : null;
+  const L = [];
+  L.push(`FAX RELAY DIAGNOSTIC — ${V}`);
+  L.push(problems.length ? 'DIAGNOSIS' : 'DIAGNOSIS — nothing looks wrong');
+  for (const p of problems) L.push(`  · ${p}`);
+  L.push('STATE');
+  L.push(`  app ${V}; service worker ${navigator.serviceWorker?.controller ? 'controlling' : 'not controlling'}; caches: ${cacheNames.join(', ') || 'none'}`);
+  L.push(`  ${navigator.onLine ? 'online' : 'offline'}; Background Sync ${'SyncManager' in self ? 'supported' : 'not supported — the online listener covers it'}`);
+  L.push(`  relay: ${cfg.endpoint || 'NOT SET'}; access code ${cfg.code ? 'set' : 'not set'}`);
+  L.push(`  offline queue: ${q.length}`);
+  L.push('RECENT SENDS (numbers partly hidden)');
+  if (!sent.length) L.push('  none');
+  for (const r of sent) L.push(`  ${maskTo(r.to)} — ${r.status}${r.pages ? ` (${r.pages}p)` : ''}${r.error ? ` — ${r.error}` : ''}`);
+  L.push('SCRIPT ERRORS SINCE OPEN');
+  if (!bootErrors.length) L.push('  none'); else for (const e of bootErrors) L.push(`  ${e}`);
+  if (est) L.push(`STORAGE  ~${Math.round((est.usage || 0) / 1024)} KB used of ~${Math.round((est.quota || 0) / 1048576)} MB available`);
+  L.push(`ENV  ${innerWidth}×${innerHeight} @${devicePixelRatio}x — ${navigator.userAgent}`);
+  return L.join('\n');
+}
+
+async function openDiag() {
+  diagDlg.showModal();
+  $('diagText').textContent = await diagnosticText();
+}
+
+$('copyDiag').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('diagText').textContent);
+    $('copyDiag').textContent = 'Copied';
+    setTimeout(() => { $('copyDiag').textContent = 'Copy report'; }, 1500);
+  } catch {
+    const r = document.createRange();
+    r.selectNodeContents($('diagText'));
+    const s = getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  }
+});
+
+renderNotes();
+
+// First-run orientation (§7e): shown once, and the same content lives
+// permanently behind the (i) — dismissing it destroys nothing.
+infoDlg.addEventListener('close', () => localStorage.setItem('intro.seen', '1'));
+if (!localStorage.getItem('intro.seen')) infoDlg.showModal();
 
 renderActivity();
 drainQueue();
