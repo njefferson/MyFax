@@ -96,6 +96,22 @@ fdtest_… }`; `GET /api/v1/fax/{id}` → 200 `completed`. Balance on a test key
 → 400 (test/live isolation).
 Source: CI run 30168093917 (`checks` workflow, MyFax), 2026-07-25.
 
+**F12** (2026-08-01) — **Relay security hardening**: (1) `[[ratelimits]]`
+bindings `SEND_RL` (6/min, key `"send"`) + `DEST_RL` (3/min, key =
+destination number) gate `/api/send` and FAIL CLOSED — an unbound or
+throwing limiter returns 503, never sends; a leaked access code can no
+longer burn quota or metered money. (2) Auth fails closed: no `ACCESS_CODE`
+set → 503 (was: open relay); CORS default is deny, not `*`. (3) Access code
+compared constant-time via SHA-256 digests (native `crypto.subtle`, no dep).
+(4) Telnyx refuses to stage in the public R2 bucket unless
+`MEDIA_TTL_CONFIRMED=true`, and path-strips the filename. All eight
+behaviors proven in `tools/worker-selftest.mjs` (offline, no network).
+Native binding needs Wrangler ≥ 4.36.0 — the deploy pins 4.114.0, so
+satisfied. (Carried in from `staging` at the 2026-08-03 merge, reformatted
+per Doctrine §2; content unchanged.)
+Source: worker/src/index.js, worker/wrangler.toml,
+tools/worker-selftest.mjs; commit history.
+
 ## Unverified / still open
 
 - **The balance response's JSON keys** — a sandbox key gets 400 from
@@ -106,14 +122,23 @@ Source: CI run 30168093917 (`checks` workflow, MyFax), 2026-07-25.
   one of the month's 2 free faxes, only on Noah's say-so.
 - The **Telnyx adapter** is unexercised end-to-end (needs a paid account,
   R2 bucket, owned number). Treat as scaffolding until proven. Note it does
-  not satisfy FaxDrop's cover-sheet fields — it has none.
+  not satisfy FaxDrop's cover-sheet fields — it has none. Before enabling it,
+  the R2 `outbound/` lifecycle-expiry rule (F12) must exist, then set
+  `MEDIA_TTL_CONFIRMED=true` — until then the Worker refuses every Telnyx
+  send.
+- The **`[[ratelimits]]` bindings on a live deploy** (F12) are verified only
+  offline, with stubs. The native binding is created implicitly on
+  `wrangler deploy`, but that a first deploy binds cleanly and enforces the
+  per-location limit must be confirmed on Noah's actual deploy. Failure mode
+  is safe (Worker fails closed → 503, faxing stops until fixed), not open.
 
 ## Doctrine §1 deviation (accepted, bounded)
 
 Faxing cannot be local-first: the document transits the relay and the carrier.
 Bounds: relay stores nothing; FaxDrop deletes on transmission end (their
 published claim — F1 source); history/settings live only in the browser; no
-analytics, no server-side anything else. Stated in the app footer. Never widen
+analytics, no server-side anything else. Stated in the app — behind the (i),
+where the full statement lives, with the footer pointing at it. Never widen
 this.
 
 ## Roadmap
