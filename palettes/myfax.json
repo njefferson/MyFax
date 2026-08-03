@@ -1,0 +1,12 @@
+{
+  "_readme": "Fax Relay's palette in the family's ROLE vocabulary, checked by the hub's palette-check.mjs (never forked): node ../noahjefferson/palette-check.mjs palettes/myfax.json. CI fetches the checker from the hub raw. One theme — the app is light-only for now. The rail is the input/panel border (the panel-to-paper fill step is 1.07:1, so the border IS the boundary — a rail, not a hairline). The hairline is the tape's decorative perforation stripe. Accents beyond primary (fault #A83A17, amber #8A5B00) are state TEXT colours used only on panel/paper and are pinned pair-by-pair in tools/contrast-gate.mjs; they are not general-purpose accents, so they are not declared here where they would be checked against every fill including ones they never touch.",
+  "fax-relay-day": {
+    "kind": "app",
+    "page": "#C3C0B2",
+    "surfaces": ["#E6E4DA", "#F2F0E7"],
+    "rail": "#626056",
+    "hairline": "#C3C0B2",
+    "text": ["#191C18", "#3C3F38", "#4B4D44"],
+    "accents": { "primary": "#24439E" }
+  }
+}

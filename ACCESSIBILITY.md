@@ -77,3 +77,30 @@ FIXED before ship — `max-width:none` with a width measured against the real
 viewport, title shrinks (`min-width:0`, ellipsis), close button `flex:none`.
 The scan now asserts hit-testability of every sheet's dismiss at
 small-phone-at-200%-text on every run. Release: 1.0.0 (pre-release).
+
+## A-012 — found 2026-08-03
+
+Running the hub's palette gate (`palette-check.mjs`, role model from
+PALETTES.md) against the app's colours found the borders and quiet grays
+under the family floors: `--rule` #9A9788 was 2.30–2.57:1 against the fills
+it edges (the rail floor is 3.4:1, and the panel→paper fill step is only
+1.07:1, so the border IS the boundary); `--ink-soft` #4E5148 was 4.43:1 on
+housing and `--ink-faint` #6A6D60 was 3.70:1 there (text floor 4.6:1 on
+every fill).
+FIXED before ship — the light ramp re-solved as one system:
+`--ink-soft` #3C3F38, `--ink-faint` #4B4D44, `--rule` #626056. The spec
+lives in `palettes/myfax.json`; the hub checker passes every hard floor and
+CI runs it (fetched from the hub, never forked). The interim `--ink-dim`
+from A-010 is superseded — the stamp uses the deepened `--ink-soft`.
+Release: 1.0.0 (pre-release).
+
+## A-013 — found 2026-08-03
+
+The offline lamp dot paints `--rule`, but the contrast gate checked
+`ink-soft` for the "idle/offline" pair — a check that could not fail
+(hub LESSONS §7g shape). The real pair measured 2.30:1, under the 3:1
+non-text floor.
+FIXED before ship — the gate now carries idle (ink-soft) and offline (rule)
+as separate pairs pinned to the tokens the CSS actually paints, and the
+A-012 rail re-solve brings the offline dot to 4.95:1. Release: 1.0.0
+(pre-release).

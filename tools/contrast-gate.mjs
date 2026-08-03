@@ -10,13 +10,12 @@
 
 const C = {
   ink: '#191C18',
-  inkSoft: '#4E5148',
-  inkFaint: '#6A6D60',
-  inkDim: '#484B42',
+  inkSoft: '#3C3F38',
+  inkFaint: '#4B4D44',
   housing: '#C3C0B2',
   panel: '#E6E4DA',
   paper: '#F2F0E7',
-  rule: '#9A9788',
+  rule: '#626056',
   signal: '#2A4FBF',
   signalDeep: '#24439E',
   fault: '#A83A17',
@@ -51,21 +50,25 @@ const PAIRS = [
   ['send button text on ink', C.paper, C.ink, 4.5],
   ['send button text on signal (hover)', C.paper, C.signal, 4.5],
   ['drop drag-over text on paper', C.signalDeep, C.paper, 4.5],
-  // §7b: the version stamp is dimmed with a TOKEN, never opacity, and its
-  // pair joins the gate in the same commit. ink-soft measured 4.43 on
-  // housing, hence the dedicated ink-dim.
-  ['version stamp (ink-dim) on housing', C.inkDim, C.housing, 4.5],
+  // §7b: the version stamp is dimmed with a TOKEN, never opacity. The
+  // 2026-08-03 palette re-solve (palettes/myfax.json vs the hub's
+  // palette-check) deepened ink-soft until it clears housing, so the stamp
+  // uses it directly; the interim ink-dim token is gone.
+  ['version stamp (ink-soft) on housing', C.inkSoft, C.housing, 4.5],
   ['sheet body text on panel', C.ink, C.panel, 4.5],
   ['diagnostic text on paper', C.ink, C.paper, 4.5],
   // non-text (3:1)
   ['lamp dot ready (signal) vs panel', C.signal, C.panel, 3],
   ['lamp dot working (amber) vs panel', C.amber, C.panel, 3],
   ['lamp dot fault vs panel', C.fault, C.panel, 3],
-  ['lamp dot idle/offline (ink-soft) vs panel', C.inkSoft, C.panel, 3],
+  ['lamp dot idle (ink-soft) vs panel', C.inkSoft, C.panel, 3],
+  // A-013: the offline dot paints --rule; this gate used to check ink-soft
+  // for it — a check that could not fail. Pinned to the real token now.
+  ['lamp dot offline (rule) vs panel', C.rule, C.panel, 3],
   ['focus ring (signal) vs housing', C.signal, C.housing, 3],
   ['focus ring (signal) vs panel', C.signal, C.panel, 3],
   ['focus ring (signal) vs paper', C.signal, C.paper, 3],
-  ['input border (rule) vs paper', C.rule, C.paper, 1], // INFO: boundary also carried by bg step panel→paper
+  ['input border (rule) vs paper', C.rule, C.paper, 3], // 1.4.11 — real since the rail re-solve; the panel→paper fill step is only 1.07
 ];
 
 const INFO = [

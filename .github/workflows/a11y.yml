@@ -18,6 +18,10 @@ jobs:
         run: |
           curl -sSf -o /tmp/docs-check.mjs https://raw.githubusercontent.com/njefferson/noahjefferson/main/docs-check.mjs
           node /tmp/docs-check.mjs .
+      - name: Palette gate (§4 — the hub's role model, never forked)
+        run: |
+          curl -sSf -o /tmp/palette-check.mjs https://raw.githubusercontent.com/njefferson/noahjefferson/main/palette-check.mjs
+          node /tmp/palette-check.mjs palettes/myfax.json
       - name: Worker self-test (stubbed provider, no network)
         run: node tools/worker-selftest.mjs
       - name: FaxDrop sandbox smoke (real API, fd_test_ key, no fax sent; skips when secret absent)

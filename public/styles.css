@@ -6,13 +6,12 @@
    here and the gate in the same commit. */
 :root{
   --ink:#191C18;
-  --ink-soft:#4E5148;
-  --ink-faint:#6A6D60;
-  --ink-dim:#484B42; /* version stamp on housing; ink-soft measured 4.43:1 there */
+  --ink-soft:#3C3F38;
+  --ink-faint:#4B4D44;
   --housing:#C3C0B2;
   --panel:#E6E4DA;
   --paper:#F2F0E7;
-  --rule:#9A9788;
+  --rule:#626056;
   --signal:#2A4FBF;
   --signal-text:#24439E;
   --fault:#A83A17;
@@ -265,7 +264,7 @@ footer a{color:var(--ink);display:inline-block;padding:calc(var(--unit)*4) 0} /*
    It doubles as the door to the diagnostic report (§7f). */
 .stamp{
   font-family:var(--mono);font-size:.6875rem;letter-spacing:.08em;
-  color:var(--ink-dim);
+  color:var(--ink-soft);
   background:transparent;border:0;cursor:pointer;
   padding:calc(var(--unit)*4) 0; /* >= 44px target */
   user-select:text;-webkit-user-select:text;
